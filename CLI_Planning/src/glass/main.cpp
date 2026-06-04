@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <CLI/CLI.hpp>
 #include <SQLiteCpp/SQLiteCpp.h>
@@ -17,11 +18,17 @@
 #include "roots/SqliteEventRepository.hpp"
 #include "roots/SqliteTodoRepository.hpp"
 #include "seed/ConflictDetector.hpp"
+#include "seed/Priority.hpp"
 #include "seed/StdUuidGenerator.hpp"
+#include "seed/Todo.hpp"
+#include "stem/AddTodoUseCase.hpp"
 #include "stem/CreateEventUseCase.hpp"
+#include "stem/ListTodosUseCase.hpp"
+#include "stem/MarkTodoDoneUseCase.hpp"
 #include "stem/ShowDashboardUseCase.hpp"
 #include "stem/commands/DashboardCommands.hpp"
 #include "stem/commands/EventCommands.hpp"
+#include "stem/commands/TodoCommands.hpp"
 
 namespace {
 
@@ -53,6 +60,53 @@ std::chrono::sys_seconds parseDateTime(const std::string& s) {
     return localCivilToUtc(y, mo, d, h, mi);
 }
 
+// "YYYY-MM-DD" → 달력 날짜(sys_days). 마감일은 시각 없는 civil date 라 변환 불필요.
+std::chrono::sys_days parseDate(const std::string& s) {
+    int y = 0, mo = 0, d = 0;
+    if (std::sscanf(s.c_str(), "%d-%d-%d", &y, &mo, &d) != 3) {
+        throw std::runtime_error("잘못된 날짜 형식 (YYYY-MM-DD): " + s);
+    }
+    return std::chrono::sys_days{std::chrono::year{y} /
+                                 std::chrono::month{static_cast<unsigned>(mo)} /
+                                 std::chrono::day{static_cast<unsigned>(d)}};
+}
+
+std::string formatDate(std::chrono::sys_days d) {
+    const std::chrono::year_month_day ymd{d};
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%04d-%02u-%02u", static_cast<int>(ymd.year()),
+                  static_cast<unsigned>(ymd.month()),
+                  static_cast<unsigned>(ymd.day()));
+    return buf;
+}
+
+planning::domain::Priority parsePriority(const std::string& s) {
+    if (s == "high") return planning::domain::Priority::HIGH;
+    if (s == "medium") return planning::domain::Priority::MEDIUM;
+    if (s == "low") return planning::domain::Priority::LOW;
+    throw std::runtime_error("우선순위는 high|medium|low 중 하나여야 합니다: " + s);
+}
+
+const char* priorityText(planning::domain::Priority p) {
+    switch (p) {
+        case planning::domain::Priority::HIGH: return "high";
+        case planning::domain::Priority::MEDIUM: return "medium";
+        case planning::domain::Priority::LOW: return "low";
+    }
+    return "?";
+}
+
+// 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A).
+std::chrono::sys_days localTodayDate() {
+    const std::time_t nowT = std::time(nullptr);
+    std::tm lt{};
+    ::localtime_r(&nowT, &lt);
+    return std::chrono::sys_days{
+        std::chrono::year{lt.tm_year + 1900} /
+        std::chrono::month{static_cast<unsigned>(lt.tm_mon + 1)} /
+        std::chrono::day{static_cast<unsigned>(lt.tm_mday)}};
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -68,6 +122,29 @@ int main(int argc, char** argv) {
     eventAdd->add_option("--title", title, "제목")->required();
     eventAdd->add_option("--start", startStr, "시작 (YYYY-MM-DDTHH:MM)")->required();
     eventAdd->add_option("--end", endStr, "종료 (YYYY-MM-DDTHH:MM)");
+
+    auto* todo = app.add_subcommand("todo", "할 일 관리");
+
+    auto* todoAdd = todo->add_subcommand("add", "할 일 추가");
+    std::string todoTitle, todoPriority = "medium", todoDue;
+    std::vector<std::string> todoTags;
+    todoAdd->add_option("--title", todoTitle, "제목")->required();
+    todoAdd->add_option("--priority", todoPriority,
+                        "우선순위 high|medium|low (기본 medium)");
+    todoAdd->add_option("--tag", todoTags, "태그 (반복 지정 가능)");
+    todoAdd->add_option("--due", todoDue, "마감일 (YYYY-MM-DD)");
+
+    auto* todoList = todo->add_subcommand("list", "할 일 목록");
+    bool listToday = false, listOverdue = false;
+    std::string listTag, listPriority;
+    todoList->add_flag("--today", listToday, "오늘 마감만");
+    todoList->add_flag("--overdue", listOverdue, "기한 초과 미완료만");
+    todoList->add_option("--tag", listTag, "태그 필터");
+    todoList->add_option("--priority", listPriority, "우선순위 필터 high|medium|low");
+
+    auto* todoDone = todo->add_subcommand("done", "완료 처리");
+    std::string doneId;
+    todoDone->add_option("--id", doneId, "Todo ID (uuid)")->required();
 
     CLI11_PARSE(app, argc, argv);
 
@@ -90,6 +167,9 @@ int main(int argc, char** argv) {
 
         pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, prompter,
                                            logger);
+        pa::AddTodoUseCase addTodo(todoRepo, idGen, logger);
+        pa::ListTodosUseCase listTodos(todoRepo, logger);
+        pa::MarkTodoDoneUseCase markTodoDone(todoRepo, logger);
         pa::ShowDashboardUseCase dashboard(eventRepo, todoRepo, logger);
 
         if (eventAdd->parsed()) {
@@ -106,25 +186,60 @@ int main(int argc, char** argv) {
             }
         } else if (event->parsed()) {
             std::cout << event->help();
-        } else {
-            // "오늘" 을 시스템 로컬 타임존 기준으로 계산(정책 A).
-            const std::time_t nowT = std::time(nullptr);
-            std::tm lt{};
-            ::localtime_r(&nowT, &lt);
-            const int ly = lt.tm_year + 1900;
-            const int lmo = lt.tm_mon + 1;
-            const int ld = lt.tm_mday;
+        } else if (todoAdd->parsed()) {
+            pa::AddTodoCommand cmd;
+            cmd.title = todoTitle;
+            cmd.priority = parsePriority(todoPriority);
+            cmd.tags = todoTags;
+            if (!todoDue.empty()) cmd.due = parseDate(todoDue);
+            addTodo.execute(cmd);
+            std::cout << "Todo '" << todoTitle << "' 추가 완료\n";
+        } else if (todoList->parsed()) {
+            pa::ListTodosQuery q;
+            if (listToday) q.dueOn = localTodayDate();
+            if (listOverdue) q.overdueAsOf = localTodayDate();
+            if (!listTag.empty()) q.tag = listTag;
+            if (!listPriority.empty()) q.priority = parsePriority(listPriority);
 
+            const auto todos = listTodos.execute(q);
+            if (todos.empty()) {
+                std::cout << "(할 일 없음)\n";
+            }
+            for (const auto& t : todos) {
+                std::cout << uuids::to_string(t.id()) << "  "
+                          << (t.isDone() ? "[x] " : "[ ] ") << t.title() << "  ("
+                          << priorityText(t.priority()) << ")";
+                if (t.dueDate()) std::cout << "  due " << formatDate(*t.dueDate());
+                if (!t.tags().empty()) {
+                    std::cout << "  #";
+                    for (std::size_t i = 0; i < t.tags().size(); ++i) {
+                        std::cout << (i ? "," : "") << t.tags()[i];
+                    }
+                }
+                std::cout << "\n";
+            }
+        } else if (todoDone->parsed()) {
+            const auto parsed = uuids::uuid::from_string(doneId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + doneId);
+            markTodoDone.execute(pa::MarkTodoDoneCommand{*parsed});
+            std::cout << "완료 처리됨: " << doneId << "\n";
+        } else if (todo->parsed()) {
+            std::cout << todo->help();
+        } else {
             pa::ShowDashboardQuery q;
+            const auto today = localTodayDate();
+            const std::chrono::year_month_day ymd{today};
+            const int ly = static_cast<int>(ymd.year());
+            const unsigned lmo = static_cast<unsigned>(ymd.month());
+            const unsigned ld = static_cast<unsigned>(ymd.day());
             // 로컬 달력 날짜 (todo overdue 비교용).
-            q.todayDate = std::chrono::sys_days{
-                std::chrono::year{ly} /
-                std::chrono::month{static_cast<unsigned>(lmo)} /
-                std::chrono::day{static_cast<unsigned>(ld)}};
+            q.todayDate = today;
             // 로컬 [오늘 자정, 내일 자정) 을 UTC instant 로 (event 범위용).
-            // mktime 이 mday+1 을 정규화하므로 월말도 안전.
-            q.dayStart = localCivilToUtc(ly, lmo, ld, 0, 0);
-            q.dayEnd = localCivilToUtc(ly, lmo, ld + 1, 0, 0);
+            // mktime 이 day+1 을 정규화하므로 월말도 안전.
+            q.dayStart = localCivilToUtc(ly, static_cast<int>(lmo),
+                                         static_cast<int>(ld), 0, 0);
+            q.dayEnd = localCivilToUtc(ly, static_cast<int>(lmo),
+                                       static_cast<int>(ld) + 1, 0, 0);
 
             const auto r = dashboard.execute(q);
             std::cout << "오늘 일정 " << r.todayEventsCount

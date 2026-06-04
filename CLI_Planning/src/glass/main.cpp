@@ -16,21 +16,30 @@
 #include "rings/SpdlogLogger.hpp"
 #include "roots/MigrationRunner.hpp"
 #include "roots/SqliteEventRepository.hpp"
+#include "roots/SqliteGoalRepository.hpp"
 #include "roots/SqliteTodoRepository.hpp"
 #include "seed/ConflictDetector.hpp"
+#include "seed/Goal.hpp"
 #include "seed/Priority.hpp"
 #include "seed/StdUuidGenerator.hpp"
 #include "seed/Todo.hpp"
 #include "stem/AddTodoUseCase.hpp"
 #include "stem/CreateEventUseCase.hpp"
+#include "stem/CreateGoalUseCase.hpp"
 #include "stem/DeleteEventUseCase.hpp"
+#include "stem/DeleteGoalUseCase.hpp"
 #include "stem/ListEventsUseCase.hpp"
+#include "stem/ListGoalsUseCase.hpp"
 #include "stem/ListTodosUseCase.hpp"
+#include "stem/LogGoalUseCase.hpp"
 #include "stem/MarkTodoDoneUseCase.hpp"
 #include "stem/ShowDashboardUseCase.hpp"
+#include "stem/ShowGoalUseCase.hpp"
 #include "stem/UpdateEventUseCase.hpp"
+#include "stem/UpdateGoalUseCase.hpp"
 #include "stem/commands/DashboardCommands.hpp"
 #include "stem/commands/EventCommands.hpp"
+#include "stem/commands/GoalCommands.hpp"
 #include "stem/commands/TodoCommands.hpp"
 
 namespace {
@@ -118,6 +127,16 @@ const char* priorityText(planning::domain::Priority p) {
     return "?";
 }
 
+// 달성률(0.0~) → ASCII 막대. 초과 달성은 막대 가득참으로 클램프.
+std::string progressBar(double ratio, int width = 10) {
+    int filled = static_cast<int>(ratio * width + 0.5);
+    if (filled < 0) filled = 0;
+    if (filled > width) filled = width;
+    std::string bar(static_cast<std::size_t>(filled), '#');
+    bar.append(static_cast<std::size_t>(width - filled), '-');
+    return "[" + bar + "]";
+}
+
 // 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A).
 std::chrono::sys_days localTodayDate() {
     const std::time_t nowT = std::time(nullptr);
@@ -188,6 +207,40 @@ int main(int argc, char** argv) {
     std::string doneId;
     todoDone->add_option("--id", doneId, "Todo ID (uuid)")->required();
 
+    auto* goal = app.add_subcommand("goal", "목표 관리");
+
+    auto* goalCreate = goal->add_subcommand("create", "목표 생성");
+    std::string gName, gUnit, gFrom, gTo;
+    int gTarget = 0;
+    goalCreate->add_option("--name", gName, "이름")->required();
+    goalCreate->add_option("--target", gTarget, "목표값 (양의 정수)")->required();
+    goalCreate->add_option("--unit", gUnit, "단위 (예: 회, km)")->required();
+    goalCreate->add_option("--from", gFrom, "기간 시작 (YYYY-MM-DD)")->required();
+    goalCreate->add_option("--to", gTo, "기간 종료 (YYYY-MM-DD)")->required();
+
+    auto* goalLog = goal->add_subcommand("log", "진행 +1 (이름으로)");
+    std::string gLogName;
+    goalLog->add_option("--name", gLogName, "목표 이름")->required();
+
+    auto* goalShow = goal->add_subcommand("show", "목표 진행 보기 (이름으로)");
+    std::string gShowName;
+    goalShow->add_option("--name", gShowName, "목표 이름")->required();
+
+    auto* goalList = goal->add_subcommand("list", "목표 목록");
+
+    auto* goalUpdate = goal->add_subcommand("update", "목표 수정 (부분)");
+    std::string gUpId, gUpName, gUpFrom, gUpTo;
+    int gUpTarget = 0;
+    goalUpdate->add_option("--id", gUpId, "목표 ID (uuid)")->required();
+    auto* oGName = goalUpdate->add_option("--name", gUpName, "이름");
+    auto* oGTarget = goalUpdate->add_option("--target", gUpTarget, "목표값");
+    auto* oGFrom = goalUpdate->add_option("--from", gUpFrom, "기간 시작 (YYYY-MM-DD)");
+    auto* oGTo = goalUpdate->add_option("--to", gUpTo, "기간 종료 (YYYY-MM-DD)");
+
+    auto* goalDelete = goal->add_subcommand("delete", "목표 삭제");
+    std::string gDelId;
+    goalDelete->add_option("--id", gDelId, "목표 ID (uuid)")->required();
+
     CLI11_PARSE(app, argc, argv);
 
     try {
@@ -203,6 +256,7 @@ int main(int argc, char** argv) {
 
         planning::adapter_sqlite::SqliteEventRepository eventRepo(db);
         planning::adapter_sqlite::SqliteTodoRepository todoRepo(db);
+        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db);
         planning::domain::ConflictDetector detector;
         planning::domain::StdUuidGenerator idGen;
         planning::adapter_cli::CliConflictPrompter prompter(std::cin, std::cout);
@@ -215,6 +269,12 @@ int main(int argc, char** argv) {
         pa::AddTodoUseCase addTodo(todoRepo, idGen, logger);
         pa::ListTodosUseCase listTodos(todoRepo, logger);
         pa::MarkTodoDoneUseCase markTodoDone(todoRepo, logger);
+        pa::CreateGoalUseCase createGoal(goalRepo, idGen, logger);
+        pa::LogGoalUseCase logGoal(goalRepo, logger);
+        pa::ShowGoalUseCase showGoal(goalRepo, logger);
+        pa::ListGoalsUseCase listGoals(goalRepo, logger);
+        pa::UpdateGoalUseCase updateGoal(goalRepo, logger);
+        pa::DeleteGoalUseCase deleteGoal(goalRepo, logger);
         pa::ShowDashboardUseCase dashboard(eventRepo, todoRepo, logger);
 
         if (eventAdd->parsed()) {
@@ -319,6 +379,69 @@ int main(int argc, char** argv) {
             std::cout << "완료 처리됨: " << doneId << "\n";
         } else if (todo->parsed()) {
             std::cout << todo->help();
+        } else if (goalCreate->parsed()) {
+            pa::CreateGoalCommand cmd;
+            cmd.name = gName;
+            cmd.targetValue = gTarget;
+            cmd.unit = gUnit;
+            cmd.periodStart = parseDate(gFrom);
+            cmd.periodEnd = parseDate(gTo);
+            createGoal.execute(cmd);
+            std::cout << "Goal '" << gName << "' 생성 완료\n";
+        } else if (goalLog->parsed()) {
+            logGoal.execute(pa::LogGoalCommand{gLogName});
+            std::cout << "기록됨: " << gLogName << " +1\n";
+        } else if (goalShow->parsed()) {
+            // show 유스케이스는 id 기반이라 이름→id 로 해석.
+            const auto goals = listGoals.execute();
+            std::optional<uuids::uuid> found;
+            for (const auto& g : goals) {
+                if (g.name() == gShowName) {
+                    found = g.id();
+                    break;
+                }
+            }
+            if (!found) throw std::runtime_error("목표를 찾을 수 없습니다: " + gShowName);
+            const auto r = showGoal.execute(pa::ShowGoalQuery{*found});
+            const int pct = static_cast<int>(r.progressRatio * 100 + 0.5);
+            std::cout << r.name << "  " << progressBar(r.progressRatio) << " " << pct
+                      << "%  (" << r.currentValue << "/" << r.targetValue << " "
+                      << r.unit << ")\n";
+        } else if (goalList->parsed()) {
+            const auto goals = listGoals.execute();
+            if (goals.empty()) {
+                std::cout << "(목표 없음)\n";
+            }
+            for (const auto& g : goals) {
+                const int pct = static_cast<int>(g.progressRatio() * 100 + 0.5);
+                std::cout << uuids::to_string(g.id()) << "  " << g.name() << "  "
+                          << progressBar(g.progressRatio()) << " " << pct << "%  ("
+                          << g.currentValue() << "/" << g.targetValue() << " "
+                          << g.unit() << ")  " << formatDate(g.periodStart()) << "~"
+                          << formatDate(g.periodEnd()) << "\n";
+            }
+        } else if (goalUpdate->parsed()) {
+            const auto parsed = uuids::uuid::from_string(gUpId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + gUpId);
+            pa::UpdateGoalCommand cmd;
+            cmd.id = *parsed;
+            if (oGName->count()) cmd.name = gUpName;
+            if (oGTarget->count()) cmd.targetValue = gUpTarget;
+            if (oGFrom->count() || oGTo->count()) {
+                if (!oGFrom->count() || !oGTo->count()) {
+                    throw std::runtime_error("기간 변경은 --from 과 --to 를 함께 지정해야 합니다");
+                }
+                cmd.period = std::make_pair(parseDate(gUpFrom), parseDate(gUpTo));
+            }
+            updateGoal.execute(cmd);
+            std::cout << "목표 수정 완료: " << gUpId << "\n";
+        } else if (goalDelete->parsed()) {
+            const auto parsed = uuids::uuid::from_string(gDelId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + gDelId);
+            deleteGoal.execute(pa::DeleteGoalCommand{*parsed});
+            std::cout << "목표 삭제됨: " << gDelId << "\n";
+        } else if (goal->parsed()) {
+            std::cout << goal->help();
         } else {
             const auto today = localTodayDate();
             pa::ShowDashboardQuery q;

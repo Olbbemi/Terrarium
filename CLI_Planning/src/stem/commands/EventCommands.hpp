@@ -33,10 +33,11 @@ struct DeleteEventCommand {
     domain::Event::Id id;
 };
 
-// Today/Week 등의 달력 계산은 어댑터(leaves)가 수행해 명시적 범위로 넘긴다.
+// Today/Week 등의 로컬 달력 계산은 엣지(glass/leaves)가 수행해 UTC instant
+// 경계로 변환한 뒤 넘긴다. (sys_days 는 UTC 자정만 표현 가능해 로컬 하루를 못 담음.)
 struct ListEventsQuery {
-    std::chrono::sys_days rangeStart;  // 포함
-    std::chrono::sys_days rangeEnd;    // 제외
+    std::chrono::sys_seconds rangeStart;  // 포함
+    std::chrono::sys_seconds rangeEnd;    // 제외
 };
 
 }  // namespace planning::application

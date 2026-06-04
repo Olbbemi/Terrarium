@@ -58,6 +58,22 @@ TEST(ListEventsUseCase, filter_today) {
     EXPECT_EQ(result[0].title(), "오늘");
 }
 
+// 회귀 가드: 로컬(예: KST) '오늘' 창은 UTC 자정을 가로지른다.
+// 범위 경계가 임의 instant(sys_seconds)로 들어오면 그 창의 이벤트를 전개/포함해야 한다.
+TEST(ListEventsUseCase, filters_by_instant_window_crossing_utc_midnight) {
+    planning::test::FakeEventRepository repo;
+    // UTC 로는 '어제' 23:00 이지만 로컬 오늘 저녁에 해당하는 이벤트.
+    repo.save(Event(uuids::uuid::from_string(k1).value(), "로컬오늘저녁",
+                    TimeRange(atDay(19999, 23), atDay(20000, 0))));
+    planning::test::FakeLogger logger;
+    ListEventsUseCase uc(repo, logger);
+
+    // 로컬 자정(오늘)=UTC 어제 15:00, 로컬 자정(내일)=UTC 오늘 15:00.
+    auto result = uc.execute(ListEventsQuery{atDay(19999, 15), atDay(20000, 15)});
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].title(), "로컬오늘저녁");
+}
+
 TEST(ListEventsUseCase, filter_week) {
     planning::test::FakeEventRepository repo;
     repo.save(ev(k1, "A", 20000));

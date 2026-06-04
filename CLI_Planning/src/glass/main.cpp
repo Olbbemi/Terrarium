@@ -23,9 +23,12 @@
 #include "seed/Todo.hpp"
 #include "stem/AddTodoUseCase.hpp"
 #include "stem/CreateEventUseCase.hpp"
+#include "stem/DeleteEventUseCase.hpp"
+#include "stem/ListEventsUseCase.hpp"
 #include "stem/ListTodosUseCase.hpp"
 #include "stem/MarkTodoDoneUseCase.hpp"
 #include "stem/ShowDashboardUseCase.hpp"
+#include "stem/UpdateEventUseCase.hpp"
 #include "stem/commands/DashboardCommands.hpp"
 #include "stem/commands/EventCommands.hpp"
 #include "stem/commands/TodoCommands.hpp"
@@ -69,6 +72,25 @@ std::chrono::sys_days parseDate(const std::string& s) {
     return std::chrono::sys_days{std::chrono::year{y} /
                                  std::chrono::month{static_cast<unsigned>(mo)} /
                                  std::chrono::day{static_cast<unsigned>(d)}};
+}
+
+// UTC sys_seconds → 로컬 "YYYY-MM-DD HH:MM" 표시(정책 A).
+std::string formatDateTime(std::chrono::sys_seconds t) {
+    const std::time_t tt = static_cast<std::time_t>(t.time_since_epoch().count());
+    std::tm lt{};
+    ::localtime_r(&tt, &lt);
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d", lt.tm_year + 1900,
+                  lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min);
+    return buf;
+}
+
+// 로컬 달력 날짜의 자정 → UTC instant (event 범위 경계용).
+std::chrono::sys_seconds localMidnightUtc(std::chrono::sys_days date) {
+    const std::chrono::year_month_day ymd{date};
+    return localCivilToUtc(static_cast<int>(ymd.year()),
+                           static_cast<int>(static_cast<unsigned>(ymd.month())),
+                           static_cast<int>(static_cast<unsigned>(ymd.day())), 0, 0);
 }
 
 std::string formatDate(std::chrono::sys_days d) {
@@ -123,6 +145,26 @@ int main(int argc, char** argv) {
     eventAdd->add_option("--start", startStr, "시작 (YYYY-MM-DDTHH:MM)")->required();
     eventAdd->add_option("--end", endStr, "종료 (YYYY-MM-DDTHH:MM)");
 
+    auto* eventList = event->add_subcommand("list", "이벤트 목록 (기본: 오늘)");
+    bool evWeek = false;
+    std::string evFrom, evTo;
+    eventList->add_flag("--week", evWeek, "오늘부터 7일");
+    eventList->add_option("--from", evFrom, "시작일 (YYYY-MM-DD, 포함)");
+    eventList->add_option("--to", evTo, "종료일 (YYYY-MM-DD, 포함)");
+
+    auto* eventUpdate = event->add_subcommand("update", "이벤트 수정 (부분)");
+    std::string evUpId, evUpTitle, evUpStart, evUpEnd;
+    eventUpdate->add_option("--id", evUpId, "이벤트 ID (uuid)")->required();
+    auto* oUpTitle = eventUpdate->add_option("--title", evUpTitle, "제목");
+    auto* oUpStart =
+        eventUpdate->add_option("--start", evUpStart, "시작 (YYYY-MM-DDTHH:MM)");
+    auto* oUpEnd =
+        eventUpdate->add_option("--end", evUpEnd, "종료 (YYYY-MM-DDTHH:MM)");
+
+    auto* eventDelete = event->add_subcommand("delete", "이벤트 삭제");
+    std::string evDelId;
+    eventDelete->add_option("--id", evDelId, "이벤트 ID (uuid)")->required();
+
     auto* todo = app.add_subcommand("todo", "할 일 관리");
 
     auto* todoAdd = todo->add_subcommand("add", "할 일 추가");
@@ -167,6 +209,9 @@ int main(int argc, char** argv) {
 
         pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, prompter,
                                            logger);
+        pa::ListEventsUseCase listEvents(eventRepo, logger);
+        pa::UpdateEventUseCase updateEvent(eventRepo, detector, prompter, logger);
+        pa::DeleteEventUseCase deleteEvent(eventRepo, logger);
         pa::AddTodoUseCase addTodo(todoRepo, idGen, logger);
         pa::ListTodosUseCase listTodos(todoRepo, logger);
         pa::MarkTodoDoneUseCase markTodoDone(todoRepo, logger);
@@ -184,6 +229,55 @@ int main(int argc, char** argv) {
             } else {
                 std::cout << "Event '" << title << "' 추가 완료\n";
             }
+        } else if (eventList->parsed()) {
+            const auto today = localTodayDate();
+            pa::ListEventsQuery q;
+            if (!evFrom.empty() || !evTo.empty()) {
+                const auto from = evFrom.empty() ? today : parseDate(evFrom);
+                const auto to = evTo.empty() ? from : parseDate(evTo);
+                q.rangeStart = localMidnightUtc(from);
+                q.rangeEnd = localMidnightUtc(to + std::chrono::days{1});  // to 포함
+            } else if (evWeek) {
+                q.rangeStart = localMidnightUtc(today);
+                q.rangeEnd = localMidnightUtc(today + std::chrono::days{7});
+            } else {
+                q.rangeStart = localMidnightUtc(today);
+                q.rangeEnd = localMidnightUtc(today + std::chrono::days{1});
+            }
+
+            const auto events = listEvents.execute(q);
+            if (events.empty()) {
+                std::cout << "(이벤트 없음)\n";
+            }
+            for (const auto& e : events) {
+                std::cout << uuids::to_string(e.id()) << "  "
+                          << formatDateTime(e.timeRange().start());
+                if (e.timeRange().end()) {
+                    std::cout << " ~ " << formatDateTime(*e.timeRange().end());
+                }
+                std::cout << "  " << e.title();
+                if (e.recurrenceRule()) std::cout << "  (반복)";
+                std::cout << "\n";
+            }
+        } else if (eventUpdate->parsed()) {
+            const auto parsed = uuids::uuid::from_string(evUpId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + evUpId);
+            pa::UpdateEventCommand cmd;
+            cmd.id = *parsed;
+            if (oUpTitle->count()) cmd.title = evUpTitle;
+            if (oUpStart->count()) cmd.start = parseDateTime(evUpStart);
+            if (oUpEnd->count()) cmd.end = parseDateTime(evUpEnd);
+            const auto result = updateEvent.execute(cmd);
+            if (result.cancelledByUser) {
+                std::cout << "취소되었습니다.\n";
+            } else {
+                std::cout << "이벤트 수정 완료: " << evUpId << "\n";
+            }
+        } else if (eventDelete->parsed()) {
+            const auto parsed = uuids::uuid::from_string(evDelId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + evDelId);
+            deleteEvent.execute(pa::DeleteEventCommand{*parsed});
+            std::cout << "이벤트 삭제됨: " << evDelId << "\n";
         } else if (event->parsed()) {
             std::cout << event->help();
         } else if (todoAdd->parsed()) {
@@ -226,20 +320,12 @@ int main(int argc, char** argv) {
         } else if (todo->parsed()) {
             std::cout << todo->help();
         } else {
-            pa::ShowDashboardQuery q;
             const auto today = localTodayDate();
-            const std::chrono::year_month_day ymd{today};
-            const int ly = static_cast<int>(ymd.year());
-            const unsigned lmo = static_cast<unsigned>(ymd.month());
-            const unsigned ld = static_cast<unsigned>(ymd.day());
-            // 로컬 달력 날짜 (todo overdue 비교용).
-            q.todayDate = today;
+            pa::ShowDashboardQuery q;
+            q.todayDate = today;  // 로컬 달력 날짜 (todo overdue 비교용)
             // 로컬 [오늘 자정, 내일 자정) 을 UTC instant 로 (event 범위용).
-            // mktime 이 day+1 을 정규화하므로 월말도 안전.
-            q.dayStart = localCivilToUtc(ly, static_cast<int>(lmo),
-                                         static_cast<int>(ld), 0, 0);
-            q.dayEnd = localCivilToUtc(ly, static_cast<int>(lmo),
-                                       static_cast<int>(ld) + 1, 0, 0);
+            q.dayStart = localMidnightUtc(today);
+            q.dayEnd = localMidnightUtc(today + std::chrono::days{1});
 
             const auto r = dashboard.execute(q);
             std::cout << "오늘 일정 " << r.todayEventsCount

@@ -20,7 +20,8 @@ public:
     std::vector<domain::Event> findOverlapping(
         const domain::TimeRange&) const override;
     std::vector<domain::Event> findInRange(
-        std::chrono::sys_days start, std::chrono::sys_days end) const override;
+        std::chrono::sys_seconds start,
+        std::chrono::sys_seconds end) const override;
     std::vector<domain::Event> findAll() const override;
     void save(const domain::Event&) override;
     void update(const domain::Event&) override;

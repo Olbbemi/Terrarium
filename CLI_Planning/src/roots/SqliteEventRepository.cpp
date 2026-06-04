@@ -114,9 +114,9 @@ std::vector<domain::Event> SqliteEventRepository::findOverlapping(
 }
 
 std::vector<domain::Event> SqliteEventRepository::findInRange(
-    std::chrono::sys_days start, std::chrono::sys_days end) const {
-    const int64_t startSec = epochSec(sys_seconds{start});
-    const int64_t endSec = epochSec(sys_seconds{end});
+    std::chrono::sys_seconds start, std::chrono::sys_seconds end) const {
+    const int64_t startSec = epochSec(start);
+    const int64_t endSec = epochSec(end);
     SQLite::Statement q(
         db_, std::string("SELECT ") + kCols +
                  " FROM events WHERE start_ts < ? AND "

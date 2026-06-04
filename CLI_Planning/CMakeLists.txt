@@ -32,6 +32,7 @@ add_library(planning_core
     src/seed/Todo.cpp
     src/seed/Goal.cpp
     src/seed/ConflictDetector.cpp
+    src/seed/StdUuidGenerator.cpp
     src/stem/CreateEventUseCase.cpp
     src/stem/UpdateEventUseCase.cpp
     src/stem/DeleteEventUseCase.cpp
@@ -75,6 +76,21 @@ add_library(planning_roots
 target_include_directories(planning_roots PUBLIC src)
 target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp)
 
+# --- 어댑터: leaves (CLI driving) ---
+add_library(planning_leaves
+    src/leaves/CliConflictPrompter.cpp
+)
+target_include_directories(planning_leaves PUBLIC src)
+target_link_libraries(planning_leaves PUBLIC planning_core)
+
+# --- 실행 파일: gaia (Composition Root) ---
+add_executable(gaia src/glass/main.cpp)
+target_include_directories(gaia PRIVATE src nutrients/CLI11/include)
+target_compile_definitions(gaia PRIVATE
+    TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
+target_link_libraries(gaia PRIVATE
+    planning_core planning_roots planning_rings planning_climate planning_leaves SQLiteCpp)
+
 # --- 테스트 ---
 add_executable(terrarium_tests
     observation/smoke_test.cpp
@@ -105,10 +121,11 @@ add_executable(terrarium_tests
     observation/roots/sqlite_event_repository_test.cpp
     observation/roots/sqlite_todo_repository_test.cpp
     observation/roots/sqlite_goal_repository_test.cpp
+    observation/leaves/cli_conflict_prompter_test.cpp
 )
 target_include_directories(terrarium_tests PRIVATE observation)
 target_compile_definitions(terrarium_tests PRIVATE
     TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
 target_link_libraries(terrarium_tests PRIVATE
-    planning_core planning_rings planning_climate planning_roots SQLiteCpp GTest::gtest_main)
+    planning_core planning_rings planning_climate planning_roots planning_leaves SQLiteCpp GTest::gtest_main)
 gtest_discover_tests(terrarium_tests)

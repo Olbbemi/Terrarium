@@ -86,3 +86,17 @@ TEST(SqliteEventRepository, findInRange_filters) {
     ASSERT_EQ(result.size(), 1u);
     EXPECT_EQ(result[0].title(), "오늘");
 }
+
+TEST(SqliteEventRepository, findInRange_uses_instant_boundaries) {
+    // 경계가 '일 자정' 정렬이 아니라 임의 instant 여도 정확히 걸러야 한다.
+    // (로컬 자정은 UTC 로 비정렬 instant — 이 슬라이스의 핵심.)
+    auto db = makeMigratedDb();
+    SqliteEventRepository repo(db);
+    repo.save(Event(id(k1), "범위안", TimeRange(atDay(20000, 5), atDay(20000, 6))));
+    repo.save(Event(id(k2), "범위밖", TimeRange(atDay(20000, 20), atDay(20000, 21))));
+
+    // [04:00, 10:00) UTC 창
+    auto result = repo.findInRange(atDay(20000, 4), atDay(20000, 10));
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].title(), "범위안");
+}

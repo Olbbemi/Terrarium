@@ -80,9 +80,9 @@ public:
     }
 
     std::vector<domain::Event> findInRange(
-        std::chrono::sys_days start, std::chrono::sys_days end) const override {
-        domain::TimeRange window(std::chrono::sys_seconds{start},
-                                 std::chrono::sys_seconds{end});
+        std::chrono::sys_seconds start,
+        std::chrono::sys_seconds end) const override {
+        domain::TimeRange window(start, end);
         std::vector<domain::Event> out;
         for (const auto& e : events_) {
             if (e.timeRange().overlaps(window)) out.push_back(e);

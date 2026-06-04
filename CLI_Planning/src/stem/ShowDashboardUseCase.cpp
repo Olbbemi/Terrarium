@@ -11,10 +11,9 @@ ShowDashboardUseCase::ShowDashboardUseCase(ports::EventRepository& events,
 
 ShowDashboardUseCase::Result ShowDashboardUseCase::execute(
     const ShowDashboardQuery& query) {
-    const auto tomorrow = query.today + std::chrono::days{1};
     // NOTE: findInRange 는 비반복 기준. 반복 인스턴스 카운트는 추후 보완(TODO).
-    const auto todayEvents = events_.findInRange(query.today, tomorrow);
-    const auto overdue = todos_.findOverdue(query.today);
+    const auto todayEvents = events_.findInRange(query.dayStart, query.dayEnd);
+    const auto overdue = todos_.findOverdue(query.todayDate);
 
     logger_.audit("dashboard.show", "viewed");
     return Result{static_cast<int>(todayEvents.size()),

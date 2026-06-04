@@ -1,0 +1,4 @@
+# 빌드 산출물
+/build/
+
+# nutrients/ (vendored 외부 소스)는 in-tree vendoring 정책상 커밋 대상이므로 무시하지 않는다.

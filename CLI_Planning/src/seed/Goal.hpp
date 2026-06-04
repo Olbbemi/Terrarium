@@ -17,6 +17,11 @@ public:
     Goal(Id id, std::string name, int targetValue, std::string unit,
          std::chrono::sys_days periodStart, std::chrono::sys_days periodEnd);
 
+    // 영속성 복원용: 저장된 누적값(currentValue)까지 포함해 재구성한다.
+    Goal(Id id, std::string name, int targetValue, int currentValue,
+         std::string unit, std::chrono::sys_days periodStart,
+         std::chrono::sys_days periodEnd);
+
     Id id() const;
     const std::string& name() const;
     int targetValue() const;

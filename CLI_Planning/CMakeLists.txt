@@ -16,6 +16,11 @@ set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(nutrients/spdlog)
 
+set(SQLITECPP_INTERNAL_SQLITE OFF CACHE BOOL "" FORCE)  # 시스템 sqlite3 링크 (NF6)
+set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
+add_subdirectory(nutrients/SQLiteCpp)
+
 # --- 테스트 ---
 enable_testing()
 include(GoogleTest)
@@ -60,6 +65,16 @@ add_library(planning_climate
 target_include_directories(planning_climate PUBLIC src PRIVATE nutrients/tomlplusplus/include)
 target_link_libraries(planning_climate PUBLIC planning_core)
 
+# --- 어댑터: roots (SQLite 저장, SQLiteCpp) ---
+add_library(planning_roots
+    src/roots/MigrationRunner.cpp
+    src/roots/SqliteEventRepository.cpp
+    src/roots/SqliteTodoRepository.cpp
+    src/roots/SqliteGoalRepository.cpp
+)
+target_include_directories(planning_roots PUBLIC src)
+target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp)
+
 # --- 테스트 ---
 add_executable(terrarium_tests
     observation/smoke_test.cpp
@@ -86,7 +101,14 @@ add_executable(terrarium_tests
     observation/stem/show_dashboard_usecase_test.cpp
     observation/rings/spdlog_logger_test.cpp
     observation/climate/toml_config_loader_test.cpp
+    observation/roots/migration_runner_test.cpp
+    observation/roots/sqlite_event_repository_test.cpp
+    observation/roots/sqlite_todo_repository_test.cpp
+    observation/roots/sqlite_goal_repository_test.cpp
 )
 target_include_directories(terrarium_tests PRIVATE observation)
-target_link_libraries(terrarium_tests PRIVATE planning_core planning_rings planning_climate GTest::gtest_main)
+target_compile_definitions(terrarium_tests PRIVATE
+    TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
+target_link_libraries(terrarium_tests PRIVATE
+    planning_core planning_rings planning_climate planning_roots SQLiteCpp GTest::gtest_main)
 gtest_discover_tests(terrarium_tests)

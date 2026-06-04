@@ -24,10 +24,16 @@ void validatePeriod(std::chrono::sys_days start, std::chrono::sys_days end) {
 
 Goal::Goal(Id id, std::string name, int targetValue, std::string unit,
            std::chrono::sys_days periodStart, std::chrono::sys_days periodEnd)
+    : Goal(id, std::move(name), targetValue, 0, std::move(unit), periodStart,
+           periodEnd) {}
+
+Goal::Goal(Id id, std::string name, int targetValue, int currentValue,
+           std::string unit, std::chrono::sys_days periodStart,
+           std::chrono::sys_days periodEnd)
     : id_(id),
       name_(std::move(name)),
       targetValue_(validateTarget(targetValue)),
-      currentValue_(0),
+      currentValue_(currentValue),
       unit_(std::move(unit)),
       periodStart_(periodStart),
       periodEnd_(periodEnd) {

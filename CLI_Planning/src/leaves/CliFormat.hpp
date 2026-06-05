@@ -4,6 +4,7 @@
 #include <string>
 
 #include "seed/Priority.hpp"
+#include "seed/RecurrenceRule.hpp"
 
 // CLI 입출력 변환(엣지 어댑터). 문자열 ↔ 도메인 타입, 로컬↔UTC 타임존 변환(정책 A),
 // 진행 막대 렌더링을 모은다. main(glass)에 두면 테스트 바이너리가 링크할 수 없어
@@ -36,5 +37,11 @@ std::chrono::sys_seconds localMidnightUtc(std::chrono::sys_days date);
 
 // 달성률(0.0~) → ASCII 막대. 초과 달성은 막대 가득참으로 클램프.
 std::string progressBar(double ratio, int width = 10);
+
+// "daily|weekly|monthly|yearly" → RecurrenceFrequency. 그 외 값이면 std::runtime_error.
+domain::RecurrenceFrequency parseFrequency(const std::string& s);
+
+// RecurrenceFrequency → "매일|매주|매월|매년".
+const char* frequencyText(domain::RecurrenceFrequency f);
 
 }  // namespace planning::adapter_cli

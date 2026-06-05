@@ -22,6 +22,7 @@
 #include "seed/ConflictDetector.hpp"
 #include "seed/Goal.hpp"
 #include "seed/Priority.hpp"
+#include "seed/RecurrenceRule.hpp"
 #include "seed/StdUuidGenerator.hpp"
 #include "seed/Todo.hpp"
 #include "stem/AddTodoUseCase.hpp"
@@ -74,9 +75,12 @@ int main(int argc, char** argv) {
     auto* event = app.add_subcommand("event", "이벤트 관리");
     auto* eventAdd = event->add_subcommand("add", "이벤트 추가");
     std::string title, startStr, endStr;
+    std::string evRepeat, evUntil;
     eventAdd->add_option("--title", title, "제목")->required();
     eventAdd->add_option("--start", startStr, "시작 (YYYY-MM-DDTHH:MM)")->required();
     eventAdd->add_option("--end", endStr, "종료 (YYYY-MM-DDTHH:MM)");
+    eventAdd->add_option("--repeat", evRepeat, "반복 daily|weekly|monthly|yearly");
+    eventAdd->add_option("--until", evUntil, "반복 종료일 (YYYY-MM-DD, 포함)");
 
     auto* eventList = event->add_subcommand("list", "이벤트 목록 (기본: 오늘)");
     bool evWeek = false;
@@ -93,6 +97,12 @@ int main(int argc, char** argv) {
         eventUpdate->add_option("--start", evUpStart, "시작 (YYYY-MM-DDTHH:MM)");
     auto* oUpEnd =
         eventUpdate->add_option("--end", evUpEnd, "종료 (YYYY-MM-DDTHH:MM)");
+    std::string evUpRepeat, evUpUntil;
+    bool evUpNoRepeat = false;
+    auto* oUpRepeat = eventUpdate->add_option("--repeat", evUpRepeat,
+                                              "반복 daily|weekly|monthly|yearly");
+    eventUpdate->add_option("--until", evUpUntil, "반복 종료일 (YYYY-MM-DD, 포함)");
+    eventUpdate->add_flag("--no-repeat", evUpNoRepeat, "반복 제거");
 
     auto* eventDelete = event->add_subcommand("delete", "이벤트 삭제");
     std::string evDelId;
@@ -191,12 +201,25 @@ int main(int argc, char** argv) {
         pa::DeleteGoalUseCase deleteGoal(goalRepo, logger);
         pa::ShowDashboardUseCase dashboard(eventRepo, todoRepo, logger);
 
+        // --repeat/--until → RecurrenceRule. until 은 해당 로컬 날짜의 끝(23:59:59)으로
+        // 잡아 그 날의 occurrence 까지 포함한다.
+        auto makeRule = [](const std::string& freq, const std::string& until) {
+            planning::domain::RecurrenceRule rule;
+            rule.frequency = parseFrequency(freq);
+            if (!until.empty()) {
+                rule.until = localMidnightUtc(parseDate(until) + std::chrono::days{1}) -
+                             std::chrono::seconds{1};
+            }
+            return rule;
+        };
+
         if (eventAdd->parsed()) {
             pa::CreateEventCommand cmd;
             cmd.title = title;
             cmd.start = parseDateTime(startStr);
             if (!endStr.empty()) cmd.end = parseDateTime(endStr);
             cmd.allDay = false;
+            if (!evRepeat.empty()) cmd.recurrence = makeRule(evRepeat, evUntil);
             const auto result = createEvent.execute(cmd);
             if (result.cancelledByUser) {
                 std::cout << "취소되었습니다.\n";
@@ -230,7 +253,10 @@ int main(int argc, char** argv) {
                     std::cout << " -> " << formatDateTime(*e.timeRange().end());
                 }
                 std::cout << "  " << e.title();
-                if (e.recurrenceRule()) std::cout << "  (반복)";
+                if (e.recurrenceRule()) {
+                    std::cout << "  (" << frequencyText(e.recurrenceRule()->frequency)
+                              << ")";
+                }
                 std::cout << "\n";
             }
         } else if (eventUpdate->parsed()) {
@@ -241,6 +267,15 @@ int main(int argc, char** argv) {
             if (oUpTitle->count()) cmd.title = evUpTitle;
             if (oUpStart->count()) cmd.start = parseDateTime(evUpStart);
             if (oUpEnd->count()) cmd.end = parseDateTime(evUpEnd);
+            if (evUpNoRepeat && oUpRepeat->count()) {
+                throw std::runtime_error("--repeat 와 --no-repeat 는 함께 쓸 수 없습니다");
+            }
+            if (evUpNoRepeat) {
+                cmd.recurrence = std::optional<planning::domain::RecurrenceRule>{};
+            } else if (oUpRepeat->count()) {
+                cmd.recurrence = std::optional<planning::domain::RecurrenceRule>{
+                    makeRule(evUpRepeat, evUpUntil)};
+            }
             const auto result = updateEvent.execute(cmd);
             if (result.cancelledByUser) {
                 std::cout << "취소되었습니다.\n";

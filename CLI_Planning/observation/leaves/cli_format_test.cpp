@@ -8,9 +8,11 @@
 
 #include "leaves/CliFormat.hpp"
 #include "seed/Priority.hpp"
+#include "seed/RecurrenceRule.hpp"
 
 namespace pac = planning::adapter_cli;
 using planning::domain::Priority;
+using planning::domain::RecurrenceFrequency;
 
 namespace {
 
@@ -63,6 +65,24 @@ TEST(CliFormat, progressBar_fill_and_clamp) {
     EXPECT_EQ(pac::progressBar(1.0), "[##########]");
     EXPECT_EQ(pac::progressBar(1.5), "[##########]");  // 초과 달성 클램프
     EXPECT_EQ(pac::progressBar(0.25, 4), "[#---]");
+}
+
+TEST(CliFormat, parseFrequency_valid) {
+    EXPECT_EQ(pac::parseFrequency("daily"), RecurrenceFrequency::Daily);
+    EXPECT_EQ(pac::parseFrequency("weekly"), RecurrenceFrequency::Weekly);
+    EXPECT_EQ(pac::parseFrequency("monthly"), RecurrenceFrequency::Monthly);
+    EXPECT_EQ(pac::parseFrequency("yearly"), RecurrenceFrequency::Yearly);
+}
+
+TEST(CliFormat, parseFrequency_invalid_throws) {
+    EXPECT_THROW(pac::parseFrequency("hourly"), std::runtime_error);
+}
+
+TEST(CliFormat, frequencyText_maps) {
+    EXPECT_STREQ(pac::frequencyText(RecurrenceFrequency::Daily), "매일");
+    EXPECT_STREQ(pac::frequencyText(RecurrenceFrequency::Weekly), "매주");
+    EXPECT_STREQ(pac::frequencyText(RecurrenceFrequency::Monthly), "매월");
+    EXPECT_STREQ(pac::frequencyText(RecurrenceFrequency::Yearly), "매년");
 }
 
 // ---------- 타임존 의존: Asia/Seoul(KST, UTC+9) 고정 ----------

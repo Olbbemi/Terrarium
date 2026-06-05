@@ -92,4 +92,23 @@ std::string progressBar(double ratio, int width) {
     return "[" + bar + "]";
 }
 
+domain::RecurrenceFrequency parseFrequency(const std::string& s) {
+    if (s == "daily") return domain::RecurrenceFrequency::Daily;
+    if (s == "weekly") return domain::RecurrenceFrequency::Weekly;
+    if (s == "monthly") return domain::RecurrenceFrequency::Monthly;
+    if (s == "yearly") return domain::RecurrenceFrequency::Yearly;
+    throw std::runtime_error(
+        "반복 주기는 daily|weekly|monthly|yearly 중 하나여야 합니다: " + s);
+}
+
+const char* frequencyText(domain::RecurrenceFrequency f) {
+    switch (f) {
+        case domain::RecurrenceFrequency::Daily: return "매일";
+        case domain::RecurrenceFrequency::Weekly: return "매주";
+        case domain::RecurrenceFrequency::Monthly: return "매월";
+        case domain::RecurrenceFrequency::Yearly: return "매년";
+    }
+    return "?";
+}
+
 }  // namespace planning::adapter_cli

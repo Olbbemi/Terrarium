@@ -94,6 +94,47 @@ TEST(UpdateEventUseCase, returns_cancelled_on_user_decline_after_change) {
     EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(300));  // 변경 안 됨
 }
 
+TEST(UpdateEventUseCase, clears_end_time) {
+    planning::test::FakeEventRepository repo;
+    repo.save(Event(id(kB), "B", TimeRange(ts(100), ts(200))));
+    ConflictDetector detector;
+    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
+    planning::test::FakeLogger logger;
+    UpdateEventUseCase uc(repo, detector, prompter, logger);
+
+    UpdateEventCommand cmd;
+    cmd.id = id(kB);
+    // 종료시각 해제: 바깥 optional 있음(변경) + 안쪽 nullopt(값 없음).
+    cmd.end = std::optional<std::chrono::sys_seconds>{std::nullopt};
+
+    auto result = uc.execute(cmd);
+    EXPECT_FALSE(result.cancelledByUser);
+    auto updated = repo.findById(id(kB));
+    ASSERT_TRUE(updated.has_value());
+    EXPECT_EQ(updated->timeRange().start(), ts(100));     // 시작 유지
+    EXPECT_FALSE(updated->timeRange().end().has_value());  // 종료 제거됨
+}
+
+TEST(UpdateEventUseCase, toggles_all_day) {
+    planning::test::FakeEventRepository repo;
+    repo.save(Event(id(kB), "B", TimeRange(ts(100), ts(200), false)));
+    ConflictDetector detector;
+    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
+    planning::test::FakeLogger logger;
+    UpdateEventUseCase uc(repo, detector, prompter, logger);
+
+    UpdateEventCommand cmd;
+    cmd.id = id(kB);
+    cmd.allDay = true;
+
+    auto result = uc.execute(cmd);
+    EXPECT_FALSE(result.cancelledByUser);
+    auto updated = repo.findById(id(kB));
+    ASSERT_TRUE(updated.has_value());
+    EXPECT_TRUE(updated->timeRange().isAllDay());
+    EXPECT_EQ(updated->timeRange().start(), ts(100));  // 시간은 유지
+}
+
 TEST(UpdateEventUseCase, partial_update_only_changed_fields) {
     planning::test::FakeEventRepository repo;
     repo.save(Event(id(kB), "원제목", TimeRange(ts(100), ts(200))));

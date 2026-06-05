@@ -92,6 +92,11 @@ int main(int argc, char** argv) {
         eventUpdate->add_option("--start", evUpStart, "시작 (YYYY-MM-DDTHH:MM)");
     auto* oUpEnd =
         eventUpdate->add_option("--end", evUpEnd, "종료 (YYYY-MM-DDTHH:MM)");
+    bool evUpClearEnd = false;
+    eventUpdate->add_flag("--clear-end", evUpClearEnd, "종료시각 제거");
+    bool evUpAllDay = false, evUpNoAllDay = false;
+    eventUpdate->add_flag("--all-day", evUpAllDay, "하루 종일로 표시");
+    eventUpdate->add_flag("--no-all-day", evUpNoAllDay, "하루 종일 해제");
     std::string evUpRepeat, evUpUntil;
     bool evUpNoRepeat = false;
     auto* oUpRepeat = eventUpdate->add_option("--repeat", evUpRepeat,
@@ -261,7 +266,21 @@ int main(int argc, char** argv) {
             cmd.id = *parsed;
             if (oUpTitle->count()) cmd.title = evUpTitle;
             if (oUpStart->count()) cmd.start = parseDateTime(evUpStart);
-            if (oUpEnd->count()) cmd.end = parseDateTime(evUpEnd);
+            if (oUpEnd->count() && evUpClearEnd) {
+                throw std::runtime_error("--end 와 --clear-end 는 함께 쓸 수 없습니다");
+            }
+            if (oUpEnd->count()) {
+                cmd.end = std::optional<std::chrono::sys_seconds>{
+                    parseDateTime(evUpEnd)};
+            } else if (evUpClearEnd) {
+                cmd.end = std::optional<std::chrono::sys_seconds>{std::nullopt};
+            }
+            if (evUpAllDay && evUpNoAllDay) {
+                throw std::runtime_error(
+                    "--all-day 와 --no-all-day 는 함께 쓸 수 없습니다");
+            }
+            if (evUpAllDay) cmd.allDay = true;
+            else if (evUpNoAllDay) cmd.allDay = false;
             if (evUpNoRepeat && oUpRepeat->count()) {
                 throw std::runtime_error("--repeat 와 --no-repeat 는 함께 쓸 수 없습니다");
             }

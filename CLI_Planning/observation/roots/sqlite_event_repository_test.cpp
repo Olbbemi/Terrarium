@@ -58,6 +58,23 @@ TEST(SqliteEventRepository, save_findById_roundtrip) {
     EXPECT_EQ(*loaded->recurrenceRule()->until, ts(99999));
 }
 
+TEST(SqliteEventRepository, persists_all_day_flag_through_update) {
+    auto db = makeMigratedDb();
+    SqliteEventRepository repo(db);
+
+    repo.save(Event(id(k1), "종일", TimeRange(ts(1000), ts(4600), true)));
+    auto loaded = repo.findById(id(k1));
+    ASSERT_TRUE(loaded.has_value());
+    EXPECT_TRUE(loaded->timeRange().isAllDay());
+
+    // 하루 종일 해제로 update 후에도 라운드트립 유지.
+    Event toggled(id(k1), "종일", TimeRange(ts(1000), ts(4600), false));
+    repo.update(toggled);
+    auto reloaded = repo.findById(id(k1));
+    ASSERT_TRUE(reloaded.has_value());
+    EXPECT_FALSE(reloaded->timeRange().isAllDay());
+}
+
 TEST(SqliteEventRepository, findById_returns_nullopt_when_not_found) {
     auto db = makeMigratedDb();
     SqliteEventRepository repo(db);

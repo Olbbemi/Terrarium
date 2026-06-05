@@ -33,8 +33,9 @@ struct LogGoalCommand {
     std::string goalName;
 };
 
+// goal show <name> — 이름으로 조회(저장소 findByName 사용, 전체 스캔 회피).
 struct ShowGoalQuery {
-    domain::Goal::Id id;
+    std::string name;
 };
 
 }  // namespace planning::application

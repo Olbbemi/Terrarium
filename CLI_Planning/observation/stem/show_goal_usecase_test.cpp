@@ -20,7 +20,6 @@ std::chrono::sys_days day(int n) {
 
 uuids::uuid id(const char* s) { return uuids::uuid::from_string(s).value(); }
 
-const char* kA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const char* kB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 Goal goalWith(int target, int logs) {
@@ -31,13 +30,13 @@ Goal goalWith(int target, int logs) {
 
 }  // namespace
 
-TEST(ShowGoalUseCase, returns_progress_ratio) {
+TEST(ShowGoalUseCase, returns_progress_ratio_by_name) {
     planning::test::FakeGoalRepository repo;
     repo.save(goalWith(4, 2));  // 2/4 = 0.5
     planning::test::FakeLogger logger;
     ShowGoalUseCase uc(repo, logger);
 
-    auto r = uc.execute(ShowGoalQuery{id(kB)});
+    auto r = uc.execute(ShowGoalQuery{"운동"});
     EXPECT_EQ(r.currentValue, 2);
     EXPECT_EQ(r.targetValue, 4);
     EXPECT_DOUBLE_EQ(r.progressRatio, 0.5);
@@ -51,14 +50,15 @@ TEST(ShowGoalUseCase, completed_at_100_percent) {
     planning::test::FakeLogger logger;
     ShowGoalUseCase uc(repo, logger);
 
-    auto r = uc.execute(ShowGoalQuery{id(kB)});
+    auto r = uc.execute(ShowGoalQuery{"운동"});
     EXPECT_DOUBLE_EQ(r.progressRatio, 1.0);
 }
 
-TEST(ShowGoalUseCase, throws_when_not_found) {
+TEST(ShowGoalUseCase, throws_when_name_not_found) {
     planning::test::FakeGoalRepository repo;
+    repo.save(goalWith(4, 2));
     planning::test::FakeLogger logger;
     ShowGoalUseCase uc(repo, logger);
 
-    EXPECT_THROW(uc.execute(ShowGoalQuery{id(kA)}), std::out_of_range);
+    EXPECT_THROW(uc.execute(ShowGoalQuery{"없는목표"}), std::out_of_range);
 }

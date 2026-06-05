@@ -355,17 +355,8 @@ int main(int argc, char** argv) {
             logGoal.execute(pa::LogGoalCommand{gLogName});
             std::cout << "기록됨: " << gLogName << " +1\n";
         } else if (goalShow->parsed()) {
-            // show 유스케이스는 id 기반이라 이름→id 로 해석.
-            const auto goals = listGoals.execute();
-            std::optional<uuids::uuid> found;
-            for (const auto& g : goals) {
-                if (g.name() == gShowName) {
-                    found = g.id();
-                    break;
-                }
-            }
-            if (!found) throw std::runtime_error("목표를 찾을 수 없습니다: " + gShowName);
-            const auto r = showGoal.execute(pa::ShowGoalQuery{*found});
+            // show 유스케이스가 저장소 findByName 으로 직접 조회(전체 스캔 회피).
+            const auto r = showGoal.execute(pa::ShowGoalQuery{gShowName});
             const int pct = static_cast<int>(r.progressRatio * 100 + 0.5);
             std::cout << r.name << "  " << progressBar(r.progressRatio) << " " << pct
                       << "%  (" << r.currentValue << "/" << r.targetValue << " "

@@ -11,9 +11,9 @@ ShowGoalUseCase::ShowGoalUseCase(ports::GoalRepository& goals,
     : goals_(goals), logger_(logger) {}
 
 ShowGoalUseCase::Result ShowGoalUseCase::execute(const ShowGoalQuery& query) {
-    auto found = goals_.findById(query.id);
+    auto found = goals_.findByName(query.name);
     if (!found) {
-        throw std::out_of_range("ShowGoalUseCase: goal not found");
+        throw std::out_of_range("ShowGoalUseCase: goal not found by name");
     }
     const domain::Goal& g = *found;
     logger_.audit("goal.show", "viewed");

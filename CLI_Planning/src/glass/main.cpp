@@ -1,7 +1,4 @@
 #include <chrono>
-#include <cstdint>
-#include <cstdio>
-#include <ctime>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -54,13 +51,11 @@ using namespace planning::adapter_cli;
 
 // 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A). 벽시계를 읽으므로 Composition Root 에 둔다.
 std::chrono::sys_days localTodayDate() {
-    const std::time_t nowT = std::time(nullptr);
-    std::tm lt{};
-    ::localtime_r(&nowT, &lt);
-    return std::chrono::sys_days{
-        std::chrono::year{lt.tm_year + 1900} /
-        std::chrono::month{static_cast<unsigned>(lt.tm_mon + 1)} /
-        std::chrono::day{static_cast<unsigned>(lt.tm_mday)}};
+    const auto* zone = std::chrono::current_zone();
+    const std::chrono::local_days ld = std::chrono::floor<std::chrono::days>(
+        zone->to_local(std::chrono::system_clock::now()));
+    // 로컬 civil 날짜의 day-count 를 그대로 sys_days(civil date)로 재해석.
+    return std::chrono::sys_days{ld.time_since_epoch()};
 }
 
 }  // namespace

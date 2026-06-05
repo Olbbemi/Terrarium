@@ -1,34 +1,28 @@
 #include "leaves/CliFormat.hpp"
 
-#include <cstdint>
 #include <cstdio>
-#include <ctime>
 #include <stdexcept>
 
 namespace planning::adapter_cli {
 
-// mktime 이 시스템 로컬 타임존 기준으로 해석해 epoch 초로 변환한다.
-// (GCC 11 libstdc++ 는 std::chrono::current_zone 미지원 → POSIX <ctime> 사용.)
-std::chrono::sys_seconds localCivilToUtc(int y, int mo, int d, int h, int mi) {
-    std::tm tm{};
-    tm.tm_year = y - 1900;
-    tm.tm_mon = mo - 1;
-    tm.tm_mday = d;
-    tm.tm_hour = h;
-    tm.tm_min = mi;
-    tm.tm_sec = 0;
-    tm.tm_isdst = -1;  // DST 여부 자동 판단
-    const std::time_t t = std::mktime(&tm);
-    return std::chrono::sys_seconds{
-        std::chrono::seconds{static_cast<std::int64_t>(t)}};
+using namespace std::chrono;
+
+// 로컬 civil 시각을 주어진 타임존으로 해석해 UTC instant 로 변환.
+sys_seconds localCivilToUtc(int y, int mo, int d, int h, int mi,
+                            const time_zone* zone) {
+    const local_seconds lt =
+        local_days{year{y} / month{static_cast<unsigned>(mo)} /
+                   day{static_cast<unsigned>(d)}} +
+        hours{h} + minutes{mi};
+    return zone->to_sys(lt);  // 모호/존재안함 시각이면 표준 예외를 던진다(KST 는 무관)
 }
 
-std::chrono::sys_seconds parseDateTime(const std::string& s) {
+sys_seconds parseDateTime(const std::string& s, const time_zone* zone) {
     int y = 0, mo = 0, d = 0, h = 0, mi = 0;
     if (std::sscanf(s.c_str(), "%d-%d-%dT%d:%d", &y, &mo, &d, &h, &mi) != 5) {
         throw std::runtime_error("잘못된 날짜시간 형식 (YYYY-MM-DDTHH:MM): " + s);
     }
-    return localCivilToUtc(y, mo, d, h, mi);
+    return localCivilToUtc(y, mo, d, h, mi, zone);
 }
 
 std::chrono::sys_days parseDate(const std::string& s) {
@@ -66,21 +60,28 @@ std::string formatDate(std::chrono::sys_days d) {
     return buf;
 }
 
-std::string formatDateTime(std::chrono::sys_seconds t) {
-    const std::time_t tt = static_cast<std::time_t>(t.time_since_epoch().count());
-    std::tm lt{};
-    ::localtime_r(&tt, &lt);
+std::string formatDateTime(std::chrono::sys_seconds t, const time_zone* zone) {
+    const local_seconds lt = zone->to_local(t);
+    const local_days dp = floor<days>(lt);
+    const year_month_day ymd{dp};
+    const hh_mm_ss<seconds> hms{lt - dp};
     char buf[64];
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d", lt.tm_year + 1900,
-                  lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min);
+    std::snprintf(buf, sizeof(buf), "%04d-%02u-%02u %02d:%02d",
+                  static_cast<int>(ymd.year()),
+                  static_cast<unsigned>(ymd.month()),
+                  static_cast<unsigned>(ymd.day()),
+                  static_cast<int>(hms.hours().count()),
+                  static_cast<int>(hms.minutes().count()));
     return buf;
 }
 
-std::chrono::sys_seconds localMidnightUtc(std::chrono::sys_days date) {
-    const std::chrono::year_month_day ymd{date};
+std::chrono::sys_seconds localMidnightUtc(std::chrono::sys_days date,
+                                          const time_zone* zone) {
+    const year_month_day ymd{date};
     return localCivilToUtc(static_cast<int>(ymd.year()),
                            static_cast<int>(static_cast<unsigned>(ymd.month())),
-                           static_cast<int>(static_cast<unsigned>(ymd.day())), 0, 0);
+                           static_cast<int>(static_cast<unsigned>(ymd.day())), 0, 0,
+                           zone);
 }
 
 std::string progressBar(double ratio, int width) {

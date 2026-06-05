@@ -1,8 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cstdlib>
-#include <ctime>
 #include <stdexcept>
 #include <string>
 
@@ -85,43 +83,30 @@ TEST(CliFormat, frequencyText_maps) {
     EXPECT_STREQ(pac::frequencyText(RecurrenceFrequency::Yearly), "매년");
 }
 
-// ---------- 타임존 의존: Asia/Seoul(KST, UTC+9) 고정 ----------
+// ---------- 타임존 의존: Asia/Seoul(KST, UTC+9) 명시 주입 ----------
+// current_zone() 은 TZ 환경변수를 무시하므로, 결정적 검증을 위해 zone 을 주입한다.
 
-class CliFormatTz : public ::testing::Test {
-protected:
-    void SetUp() override {
-        const char* tz = std::getenv("TZ");
-        hadTz_ = (tz != nullptr);
-        saved_ = hadTz_ ? std::string(tz) : std::string();
-        setenv("TZ", "Asia/Seoul", 1);
-        tzset();
-    }
-    void TearDown() override {
-        if (hadTz_) {
-            setenv("TZ", saved_.c_str(), 1);
-        } else {
-            unsetenv("TZ");
-        }
-        tzset();
-    }
-    std::string saved_;
-    bool hadTz_ = false;
-};
+namespace {
+const std::chrono::time_zone* seoul() {
+    return std::chrono::locate_zone("Asia/Seoul");
+}
+}  // namespace
 
-TEST_F(CliFormatTz, parseDateTime_local_to_utc) {
+TEST(CliFormat, parseDateTime_local_to_utc) {
     // 2026-06-05T14:00 KST == 2026-06-05 05:00 UTC == epoch 1780635600
-    EXPECT_EQ(pac::parseDateTime("2026-06-05T14:00"), sec(1780635600));
+    EXPECT_EQ(pac::parseDateTime("2026-06-05T14:00", seoul()), sec(1780635600));
 }
 
-TEST_F(CliFormatTz, parseDateTime_invalid_throws) {
-    EXPECT_THROW(pac::parseDateTime("2026-06-05 14:00"), std::runtime_error);
+TEST(CliFormat, parseDateTime_invalid_throws) {
+    EXPECT_THROW(pac::parseDateTime("2026-06-05 14:00", seoul()),
+                 std::runtime_error);
 }
 
-TEST_F(CliFormatTz, formatDateTime_utc_to_local) {
-    EXPECT_EQ(pac::formatDateTime(sec(1780635600)), "2026-06-05 14:00");
+TEST(CliFormat, formatDateTime_utc_to_local) {
+    EXPECT_EQ(pac::formatDateTime(sec(1780635600), seoul()), "2026-06-05 14:00");
 }
 
-TEST_F(CliFormatTz, localMidnightUtc_of_local_day) {
+TEST(CliFormat, localMidnightUtc_of_local_day) {
     // KST 자정(2026-06-05 00:00) == 2026-06-04 15:00 UTC == epoch 1780585200
-    EXPECT_EQ(pac::localMidnightUtc(ymd(2026, 6, 5)), sec(1780585200));
+    EXPECT_EQ(pac::localMidnightUtc(ymd(2026, 6, 5), seoul()), sec(1780585200));
 }

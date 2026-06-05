@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <stdexcept>
 
 #include "seed/Priority.hpp"
@@ -16,6 +17,10 @@ using planning::domain::Todo;
 namespace {
 
 uuids::uuid id(const char* s) { return uuids::uuid::from_string(s).value(); }
+
+std::chrono::sys_days day(int n) {
+    return std::chrono::sys_days{std::chrono::days{n}};
+}
 
 const char* kA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const char* kB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -49,6 +54,40 @@ TEST(UpdateTodoUseCase, throws_when_not_found) {
     cmd.id = id(kA);
     cmd.title = "x";
     EXPECT_THROW(uc.execute(cmd), std::out_of_range);
+}
+
+TEST(UpdateTodoUseCase, replaces_tags_fully) {
+    planning::test::FakeTodoRepository repo;
+    repo.save(Todo(id(kB), "T", Priority::LOW, {"a", "b"}));
+    planning::test::FakeLogger logger;
+    UpdateTodoUseCase uc(repo, logger);
+
+    UpdateTodoCommand cmd;
+    cmd.id = id(kB);
+    cmd.tags = std::vector<std::string>{"c"};  // 전체 교체
+
+    uc.execute(cmd);
+    auto updated = repo.findById(id(kB));
+    ASSERT_TRUE(updated.has_value());
+    ASSERT_EQ(updated->tags().size(), 1u);
+    EXPECT_EQ(updated->tags()[0], "c");
+}
+
+TEST(UpdateTodoUseCase, clears_due_date) {
+    planning::test::FakeTodoRepository repo;
+    repo.save(Todo(id(kB), "T", Priority::LOW, {}, day(20000)));
+    planning::test::FakeLogger logger;
+    UpdateTodoUseCase uc(repo, logger);
+
+    UpdateTodoCommand cmd;
+    cmd.id = id(kB);
+    // 마감 해제: 바깥 optional 있음(변경) + 안쪽 nullopt(값 없음).
+    cmd.due = std::optional<std::chrono::sys_days>{std::nullopt};
+
+    uc.execute(cmd);
+    auto updated = repo.findById(id(kB));
+    ASSERT_TRUE(updated.has_value());
+    EXPECT_FALSE(updated->dueDate().has_value());
 }
 
 TEST(UpdateTodoUseCase, rename_to_same_value_no_op) {

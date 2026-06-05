@@ -29,6 +29,7 @@
 #include "stem/CreateGoalUseCase.hpp"
 #include "stem/DeleteEventUseCase.hpp"
 #include "stem/DeleteGoalUseCase.hpp"
+#include "stem/DeleteTodoUseCase.hpp"
 #include "stem/ListEventsUseCase.hpp"
 #include "stem/ListGoalsUseCase.hpp"
 #include "stem/ListTodosUseCase.hpp"
@@ -38,6 +39,7 @@
 #include "stem/ShowGoalUseCase.hpp"
 #include "stem/UpdateEventUseCase.hpp"
 #include "stem/UpdateGoalUseCase.hpp"
+#include "stem/UpdateTodoUseCase.hpp"
 #include "stem/commands/DashboardCommands.hpp"
 #include "stem/commands/EventCommands.hpp"
 #include "stem/commands/GoalCommands.hpp"
@@ -133,6 +135,24 @@ int main(int argc, char** argv) {
     std::string doneId;
     todoDone->add_option("--id", doneId, "Todo ID (uuid)")->required();
 
+    auto* todoUpdate = todo->add_subcommand("update", "할 일 수정 (부분)");
+    std::string tuId, tuTitle, tuPriority, tuDue;
+    std::vector<std::string> tuTags;
+    bool tuClearDue = false, tuClearTags = false;
+    todoUpdate->add_option("--id", tuId, "Todo ID (uuid)")->required();
+    auto* oTuTitle = todoUpdate->add_option("--title", tuTitle, "제목");
+    auto* oTuPriority =
+        todoUpdate->add_option("--priority", tuPriority, "우선순위 high|medium|low");
+    auto* oTuTag =
+        todoUpdate->add_option("--tag", tuTags, "태그 (반복 지정, 전체 교체)");
+    auto* oTuDue = todoUpdate->add_option("--due", tuDue, "마감일 (YYYY-MM-DD)");
+    todoUpdate->add_flag("--clear-due", tuClearDue, "마감일 제거");
+    todoUpdate->add_flag("--clear-tags", tuClearTags, "태그 전체 제거");
+
+    auto* todoDelete = todo->add_subcommand("delete", "할 일 삭제");
+    std::string tdId;
+    todoDelete->add_option("--id", tdId, "Todo ID (uuid)")->required();
+
     auto* goal = app.add_subcommand("goal", "목표 관리");
 
     auto* goalCreate = goal->add_subcommand("create", "목표 생성");
@@ -218,6 +238,8 @@ int main(int argc, char** argv) {
         pa::AddTodoUseCase addTodo(todoRepo, idGen, logger);
         pa::ListTodosUseCase listTodos(todoRepo, logger);
         pa::MarkTodoDoneUseCase markTodoDone(todoRepo, logger);
+        pa::UpdateTodoUseCase updateTodo(todoRepo, logger);
+        pa::DeleteTodoUseCase deleteTodo(todoRepo, logger);
         pa::CreateGoalUseCase createGoal(goalRepo, idGen, logger);
         pa::LogGoalUseCase logGoal(goalRepo, logger);
         pa::ShowGoalUseCase showGoal(goalRepo, logger);
@@ -365,6 +387,33 @@ int main(int argc, char** argv) {
             if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + doneId);
             markTodoDone.execute(pa::MarkTodoDoneCommand{*parsed});
             std::cout << "완료 처리됨: " << doneId << "\n";
+        } else if (todoUpdate->parsed()) {
+            const auto parsed = uuids::uuid::from_string(tuId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + tuId);
+            pa::UpdateTodoCommand cmd;
+            cmd.id = *parsed;
+            if (oTuTitle->count()) cmd.title = tuTitle;
+            if (oTuPriority->count()) cmd.priority = parsePriority(tuPriority);
+            if (oTuDue->count() && tuClearDue) {
+                throw std::runtime_error("--due 와 --clear-due 는 함께 쓸 수 없습니다");
+            }
+            if (oTuDue->count()) {
+                cmd.due = std::optional<std::chrono::sys_days>{parseDate(tuDue)};
+            } else if (tuClearDue) {
+                cmd.due = std::optional<std::chrono::sys_days>{std::nullopt};
+            }
+            if (oTuTag->count() && tuClearTags) {
+                throw std::runtime_error("--tag 와 --clear-tags 는 함께 쓸 수 없습니다");
+            }
+            if (oTuTag->count()) cmd.tags = tuTags;
+            else if (tuClearTags) cmd.tags = std::vector<std::string>{};
+            updateTodo.execute(cmd);
+            std::cout << "Todo 수정 완료: " << tuId << "\n";
+        } else if (todoDelete->parsed()) {
+            const auto parsed = uuids::uuid::from_string(tdId);
+            if (!parsed) throw std::runtime_error("잘못된 ID 형식: " + tdId);
+            deleteTodo.execute(pa::DeleteTodoCommand{*parsed});
+            std::cout << "Todo 삭제됨: " << tdId << "\n";
         } else if (todo->parsed()) {
             std::cout << todo->help();
         } else if (goalCreate->parsed()) {

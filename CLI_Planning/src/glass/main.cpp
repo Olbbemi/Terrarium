@@ -480,7 +480,7 @@ int main(int argc, char** argv) {
 
             const auto r = dashboard.execute(q);
             std::cout << "오늘 일정 " << r.todayEventsCount
-                      << "개 / 마감 임박 Todo " << r.overdueTodosCount << "개\n";
+                      << "개 / 기한 초과 Todo " << r.overdueTodosCount << "개\n";
         }
     } catch (const std::exception& e) {
         std::cerr << "오류: " << e.what() << "\n";

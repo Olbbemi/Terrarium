@@ -79,6 +79,7 @@ target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp)
 # --- 어댑터: leaves (CLI driving) ---
 add_library(planning_leaves
     src/leaves/CliConflictPrompter.cpp
+    src/leaves/CliFormat.cpp
 )
 target_include_directories(planning_leaves PUBLIC src)
 target_link_libraries(planning_leaves PUBLIC planning_core)
@@ -122,6 +123,7 @@ add_executable(terrarium_tests
     observation/roots/sqlite_todo_repository_test.cpp
     observation/roots/sqlite_goal_repository_test.cpp
     observation/leaves/cli_conflict_prompter_test.cpp
+    observation/leaves/cli_format_test.cpp
 )
 target_include_directories(terrarium_tests PRIVATE observation)
 target_compile_definitions(terrarium_tests PRIVATE

@@ -1,0 +1,107 @@
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <cstdlib>
+#include <ctime>
+#include <stdexcept>
+#include <string>
+
+#include "leaves/CliFormat.hpp"
+#include "seed/Priority.hpp"
+
+namespace pac = planning::adapter_cli;
+using planning::domain::Priority;
+
+namespace {
+
+std::chrono::sys_seconds sec(long s) {
+    return std::chrono::sys_seconds{std::chrono::seconds{s}};
+}
+
+std::chrono::sys_days ymd(int y, unsigned m, unsigned d) {
+    return std::chrono::sys_days{std::chrono::year{y} / std::chrono::month{m} /
+                                 std::chrono::day{d}};
+}
+
+}  // namespace
+
+// ---------- 타임존 비의존(pure) ----------
+
+TEST(CliFormat, parseDate_valid) {
+    EXPECT_EQ(pac::parseDate("2026-06-05"), ymd(2026, 6, 5));
+}
+
+TEST(CliFormat, parseDate_invalid_throws) {
+    EXPECT_THROW(pac::parseDate("2026/06/05"), std::runtime_error);
+    EXPECT_THROW(pac::parseDate("nope"), std::runtime_error);
+}
+
+TEST(CliFormat, formatDate_roundtrip) {
+    EXPECT_EQ(pac::formatDate(ymd(2026, 6, 5)), "2026-06-05");
+    EXPECT_EQ(pac::formatDate(ymd(2026, 12, 1)), "2026-12-01");
+}
+
+TEST(CliFormat, parsePriority_valid) {
+    EXPECT_EQ(pac::parsePriority("high"), Priority::HIGH);
+    EXPECT_EQ(pac::parsePriority("medium"), Priority::MEDIUM);
+    EXPECT_EQ(pac::parsePriority("low"), Priority::LOW);
+}
+
+TEST(CliFormat, parsePriority_invalid_throws) {
+    EXPECT_THROW(pac::parsePriority("urgent"), std::runtime_error);
+}
+
+TEST(CliFormat, priorityText_maps_back) {
+    EXPECT_STREQ(pac::priorityText(Priority::HIGH), "high");
+    EXPECT_STREQ(pac::priorityText(Priority::MEDIUM), "medium");
+    EXPECT_STREQ(pac::priorityText(Priority::LOW), "low");
+}
+
+TEST(CliFormat, progressBar_fill_and_clamp) {
+    EXPECT_EQ(pac::progressBar(0.0), "[----------]");
+    EXPECT_EQ(pac::progressBar(0.3), "[###-------]");
+    EXPECT_EQ(pac::progressBar(1.0), "[##########]");
+    EXPECT_EQ(pac::progressBar(1.5), "[##########]");  // 초과 달성 클램프
+    EXPECT_EQ(pac::progressBar(0.25, 4), "[#---]");
+}
+
+// ---------- 타임존 의존: Asia/Seoul(KST, UTC+9) 고정 ----------
+
+class CliFormatTz : public ::testing::Test {
+protected:
+    void SetUp() override {
+        const char* tz = std::getenv("TZ");
+        hadTz_ = (tz != nullptr);
+        saved_ = hadTz_ ? std::string(tz) : std::string();
+        setenv("TZ", "Asia/Seoul", 1);
+        tzset();
+    }
+    void TearDown() override {
+        if (hadTz_) {
+            setenv("TZ", saved_.c_str(), 1);
+        } else {
+            unsetenv("TZ");
+        }
+        tzset();
+    }
+    std::string saved_;
+    bool hadTz_ = false;
+};
+
+TEST_F(CliFormatTz, parseDateTime_local_to_utc) {
+    // 2026-06-05T14:00 KST == 2026-06-05 05:00 UTC == epoch 1780635600
+    EXPECT_EQ(pac::parseDateTime("2026-06-05T14:00"), sec(1780635600));
+}
+
+TEST_F(CliFormatTz, parseDateTime_invalid_throws) {
+    EXPECT_THROW(pac::parseDateTime("2026-06-05 14:00"), std::runtime_error);
+}
+
+TEST_F(CliFormatTz, formatDateTime_utc_to_local) {
+    EXPECT_EQ(pac::formatDateTime(sec(1780635600)), "2026-06-05 14:00");
+}
+
+TEST_F(CliFormatTz, localMidnightUtc_of_local_day) {
+    // KST 자정(2026-06-05 00:00) == 2026-06-04 15:00 UTC == epoch 1780585200
+    EXPECT_EQ(pac::localMidnightUtc(ymd(2026, 6, 5)), sec(1780585200));
+}

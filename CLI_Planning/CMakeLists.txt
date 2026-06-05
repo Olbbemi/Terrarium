@@ -62,6 +62,7 @@ target_link_libraries(planning_rings PUBLIC planning_core PRIVATE spdlog::spdlog
 # --- 어댑터: climate (설정, toml++) ---
 add_library(planning_climate
     src/climate/TomlConfigLoader.cpp
+    src/climate/DefaultConfig.cpp
 )
 target_include_directories(planning_climate PUBLIC src PRIVATE nutrients/tomlplusplus/include)
 target_link_libraries(planning_climate PUBLIC planning_core)
@@ -118,6 +119,7 @@ add_executable(terrarium_tests
     observation/stem/show_dashboard_usecase_test.cpp
     observation/rings/spdlog_logger_test.cpp
     observation/climate/toml_config_loader_test.cpp
+    observation/climate/render_default_config_test.cpp
     observation/roots/migration_runner_test.cpp
     observation/roots/sqlite_event_repository_test.cpp
     observation/roots/sqlite_todo_repository_test.cpp

@@ -1,4 +1,5 @@
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -8,6 +9,7 @@
 #include <CLI/CLI.hpp>
 #include <SQLiteCpp/SQLiteCpp.h>
 
+#include "climate/DefaultConfig.hpp"
 #include "climate/TomlConfigLoader.hpp"
 #include "leaves/CliConflictPrompter.hpp"
 #include "leaves/CliFormat.hpp"
@@ -165,7 +167,30 @@ int main(int argc, char** argv) {
     std::string gDelId;
     goalDelete->add_option("--id", gDelId, "목표 ID (uuid)")->required();
 
+    auto* initCmd = app.add_subcommand("init", "설정 TOML 파일 생성");
+    std::string initDb, initLog;
+    initCmd->add_option("--db", initDb, "데이터베이스 파일 경로")->required();
+    initCmd->add_option("--log", initLog, "로그 파일 경로")->required();
+
     CLI11_PARSE(app, argc, argv);
+
+    // init 은 설정을 '쓰는' 명령이라, 설정을 '읽는' Composition Root 진입 전에 처리한다.
+    if (initCmd->parsed()) {
+        try {
+            const std::string toml =
+                planning::adapter_config::renderDefaultConfig(initDb, initLog);
+            std::ofstream out(configPath, std::ios::trunc);  // 항상 덮어쓰기
+            if (!out) {
+                throw std::runtime_error("설정 파일을 쓸 수 없습니다: " + configPath);
+            }
+            out << toml;
+            std::cout << "설정 파일 생성: " << configPath << "\n";
+            return 0;
+        } catch (const std::exception& e) {
+            std::cerr << "오류: " << e.what() << "\n";
+            return 1;
+        }
+    }
 
     try {
         // --- Composition Root ---

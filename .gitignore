@@ -2,3 +2,8 @@
 /build/
 
 # nutrients/ (vendored 외부 소스)는 in-tree vendoring 정책상 커밋 대상이므로 무시하지 않는다.
+
+# code-analyze 산출물: 소스가 바뀔 때마다 재생성되는 파생물이라 추적하지 않는다.
+# (analyze=정식 as-built 산출물, analyze_temp=스크래치. 둘 다 제외.)
+/orchard/CLI_Planning/analyze/
+/orchard/CLI_Planning/analyze_temp/

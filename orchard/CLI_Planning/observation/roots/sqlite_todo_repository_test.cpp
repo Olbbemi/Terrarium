@@ -12,7 +12,7 @@
 using planning::adapter_sqlite::SqliteTodoRepository;
 using planning::domain::Priority;
 using planning::domain::Todo;
-using planning::test::makeMigratedDb;
+using planning::test::makeMigratedDatabase;
 
 namespace {
 
@@ -35,11 +35,11 @@ const char* k2 = "22222222-2222-2222-2222-222222222222";
 }  // namespace
 
 TEST(SqliteTodoRepository, save_with_tags_persists_join_rows) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteTodoRepository repo(db);
     repo.save(Todo(id(k1), "장보기", Priority::MEDIUM, {"home", "errand"}, day(20000)));
 
-    EXPECT_EQ(countRows(db, "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?",
+    EXPECT_EQ(countRows(db.handle(), "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?",
                         uuids::to_string(id(k1))),
               2);
     auto loaded = repo.findById(id(k1));
@@ -50,19 +50,19 @@ TEST(SqliteTodoRepository, save_with_tags_persists_join_rows) {
 }
 
 TEST(SqliteTodoRepository, remove_cascades_tags) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteTodoRepository repo(db);
     repo.save(Todo(id(k1), "정리", Priority::LOW, {"home", "weekend"}));
     repo.remove(id(k1));
 
     EXPECT_FALSE(repo.findById(id(k1)).has_value());
-    EXPECT_EQ(countRows(db, "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?",
+    EXPECT_EQ(countRows(db.handle(), "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?",
                         uuids::to_string(id(k1))),
               0);
 }
 
 TEST(SqliteTodoRepository, findByTag_returns_matching) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteTodoRepository repo(db);
     repo.save(Todo(id(k1), "A", Priority::LOW, {"home"}));
     repo.save(Todo(id(k2), "B", Priority::LOW, {"work"}));
@@ -73,7 +73,7 @@ TEST(SqliteTodoRepository, findByTag_returns_matching) {
 }
 
 TEST(SqliteTodoRepository, overdue_excludes_done) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteTodoRepository repo(db);
     repo.save(Todo(id(k1), "지남미완료", Priority::LOW, {}, day(19990)));
     Todo done(id(k2), "지남완료", Priority::LOW, {}, day(19990));
@@ -86,10 +86,10 @@ TEST(SqliteTodoRepository, overdue_excludes_done) {
 }
 
 TEST(SqliteTodoRepository, priority_invalid_throws_check_constraint) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     // 도메인을 우회한 raw INSERT 로 CHECK(priority IN (0,1,2)) 위반.
     EXPECT_THROW(
-        db.exec("INSERT INTO todos (id, title, done, priority) "
+        db.handle().exec("INSERT INTO todos (id, title, done, priority) "
                 "VALUES ('x', 't', 0, 9)"),
         SQLite::Exception);
 }

@@ -8,11 +8,13 @@ class Database;
 
 namespace toolshed::sqlite {
 
+class Database;
+
 // seasons/ 의 NNN_*.sql 마이그레이션을 버전 순으로 적용한다(메커니즘만, 앱 무관).
 // 이미 적용된 버전은 건너뛰고, 각 마이그레이션은 트랜잭션으로 적용한다.
 class MigrationRunner {
 public:
-    explicit MigrationRunner(SQLite::Database& db);
+    explicit MigrationRunner(Database& db);
 
     // 실패 시 해당 마이그레이션은 롤백되고 예외(SQLite::Exception)가 전파된다.
     void run(const std::filesystem::path& migrationsDir);

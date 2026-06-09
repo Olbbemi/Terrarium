@@ -1,5 +1,7 @@
 #include "toolshed/sqlite/MigrationRunner.hpp"
 
+#include "toolshed/sqlite/Database.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -36,7 +38,7 @@ std::string readFile(const std::filesystem::path& p) {
 
 }  // namespace
 
-MigrationRunner::MigrationRunner(SQLite::Database& db) : db_(db) {}
+MigrationRunner::MigrationRunner(Database& db) : db_(db.handle()) {}
 
 void MigrationRunner::run(const std::filesystem::path& migrationsDir) {
     db_.exec(

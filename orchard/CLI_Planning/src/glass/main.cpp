@@ -229,14 +229,14 @@ int main(int argc, char** argv) {
             .separateDebugAudit = lc.separateDebugAudit,
         });
 
-        // 연결 라이프사이클(열기/PRAGMA/RAII)은 toolshed/sqlite 로 추출.
-        // 저장소는 아직 raw handle() 을 받는다(A4a 통과; A4b/c 에서 래퍼 경유 재배선).
+        // 연결 라이프사이클(열기/PRAGMA/RAII)과 마이그레이션은 toolshed/sqlite 경유.
+        // 저장소 3종 모두 toolshed::sqlite::Database 경계를 받는다(A4 완료).
         auto db = toolshed::sqlite::Database::open(config.dbPath());
-        toolshed::sqlite::MigrationRunner(db.handle()).run(TERRARIUM_MIGRATIONS_DIR);
+        toolshed::sqlite::MigrationRunner(db).run(TERRARIUM_MIGRATIONS_DIR);
 
-        planning::adapter_sqlite::SqliteEventRepository eventRepo(db);  // 새 경계(A4b)
-        planning::adapter_sqlite::SqliteTodoRepository todoRepo(db.handle());
-        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db.handle());
+        planning::adapter_sqlite::SqliteEventRepository eventRepo(db);
+        planning::adapter_sqlite::SqliteTodoRepository todoRepo(db);
+        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db);
         planning::domain::ConflictDetector detector;
         planning::domain::StdUuidGenerator idGen;
         planning::adapter_cli::CliConflictPrompter prompter(std::cin, std::cout);

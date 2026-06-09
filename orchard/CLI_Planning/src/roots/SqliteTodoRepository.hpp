@@ -10,12 +10,16 @@
 namespace SQLite {
 class Database;
 }
+namespace toolshed::sqlite {
+class Database;
+}
 
 namespace planning::adapter_sqlite {
 
 class SqliteTodoRepository : public ports::TodoRepository {
 public:
-    explicit SqliteTodoRepository(SQLite::Database& db);
+    // 연결은 toolshed/sqlite 경계 경유(A4c). 내부 SQL 은 handle() 로 직접 수행.
+    explicit SqliteTodoRepository(toolshed::sqlite::Database& db);
 
     std::optional<domain::Todo> findById(domain::Todo::Id) const override;
     std::vector<domain::Todo> findByDueDate(

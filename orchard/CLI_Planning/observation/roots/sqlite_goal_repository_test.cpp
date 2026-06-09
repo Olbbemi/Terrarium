@@ -10,7 +10,7 @@
 
 using planning::adapter_sqlite::SqliteGoalRepository;
 using planning::domain::Goal;
-using planning::test::makeMigratedDb;
+using planning::test::makeMigratedDatabase;
 
 namespace {
 
@@ -31,7 +31,7 @@ const char* k2 = "22222222-2222-2222-2222-222222222222";
 }  // namespace
 
 TEST(SqliteGoalRepository, findByName_returns_goal) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteGoalRepository repo(db);
     repo.save(goal(k1, "운동"));
 
@@ -42,7 +42,7 @@ TEST(SqliteGoalRepository, findByName_returns_goal) {
 }
 
 TEST(SqliteGoalRepository, save_roundtrip_preserves_counter) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteGoalRepository repo(db);
     Goal g = goal(k1, "운동");
     g.incrementCounter();
@@ -56,14 +56,14 @@ TEST(SqliteGoalRepository, save_roundtrip_preserves_counter) {
 }
 
 TEST(SqliteGoalRepository, name_unique_constraint_throws_on_duplicate) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteGoalRepository repo(db);
     repo.save(goal(k1, "운동"));
     EXPECT_THROW(repo.save(goal(k2, "운동")), SQLite::Exception);
 }
 
 TEST(SqliteGoalRepository, rename_persists_name_change) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteGoalRepository repo(db);
     repo.save(goal(k1, "운동"));
 

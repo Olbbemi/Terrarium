@@ -9,12 +9,16 @@
 namespace SQLite {
 class Database;
 }
+namespace toolshed::sqlite {
+class Database;
+}
 
 namespace planning::adapter_sqlite {
 
 class SqliteGoalRepository : public ports::GoalRepository {
 public:
-    explicit SqliteGoalRepository(SQLite::Database& db);
+    // 연결은 toolshed/sqlite 경계 경유(A4c). 내부 SQL 은 handle() 로 직접 수행.
+    explicit SqliteGoalRepository(toolshed::sqlite::Database& db);
 
     std::optional<domain::Goal> findById(domain::Goal::Id) const override;
     std::optional<domain::Goal> findByName(const std::string&) const override;

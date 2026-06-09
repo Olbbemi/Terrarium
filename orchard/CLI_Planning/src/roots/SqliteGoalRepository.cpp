@@ -6,6 +6,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
+#include "toolshed/sqlite/Database.hpp"
 #include "trunk/domain/Goal.hpp"
 
 namespace planning::adapter_sqlite {
@@ -37,7 +38,8 @@ domain::Goal rowToGoal(SQLite::Statement& q) {
 
 }  // namespace
 
-SqliteGoalRepository::SqliteGoalRepository(SQLite::Database& db) : db_(db) {}
+SqliteGoalRepository::SqliteGoalRepository(toolshed::sqlite::Database& db)
+    : db_(db.handle()) {}
 
 std::optional<domain::Goal> SqliteGoalRepository::findById(
     domain::Goal::Id id) const {

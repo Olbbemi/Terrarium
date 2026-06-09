@@ -5,6 +5,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
+#include "toolshed/sqlite/Database.hpp"
 #include "trunk/domain/Todo.hpp"
 
 namespace planning::adapter_sqlite {
@@ -89,7 +90,8 @@ void insertTodoRow(SQLite::Database& db, const domain::Todo& t) {
 
 }  // namespace
 
-SqliteTodoRepository::SqliteTodoRepository(SQLite::Database& db) : db_(db) {}
+SqliteTodoRepository::SqliteTodoRepository(toolshed::sqlite::Database& db)
+    : db_(db.handle()) {}
 
 std::optional<domain::Todo> SqliteTodoRepository::findById(
     domain::Todo::Id id) const {

@@ -4,7 +4,7 @@
 
 #include <toml++/toml.hpp>
 
-namespace planning::adapter_config {
+namespace planning::config {
 
 std::string renderDefaultConfig(const std::filesystem::path& dbPath,
                                 const std::filesystem::path& logPath) {
@@ -30,4 +30,4 @@ std::string renderDefaultConfig(const std::filesystem::path& dbPath,
     return ss.str();
 }
 
-}  // namespace planning::adapter_config
+}  // namespace planning::config

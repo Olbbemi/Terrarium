@@ -8,7 +8,7 @@
 #include "toolshed/sqlite/Database.hpp"
 #include "trunk/domain/Todo.hpp"
 
-namespace planning::adapter_sqlite {
+namespace planning::store {
 
 namespace {
 
@@ -189,4 +189,4 @@ void SqliteTodoRepository::remove(domain::Todo::Id id) {
     s.exec();  // todo_tags 는 FK ON DELETE CASCADE
 }
 
-}  // namespace planning::adapter_sqlite
+}  // namespace planning::store

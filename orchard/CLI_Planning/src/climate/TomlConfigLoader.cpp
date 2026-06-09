@@ -5,7 +5,7 @@
 
 #include <toml++/toml.hpp>
 
-namespace planning::adapter_config {
+namespace planning::config {
 
 TomlConfigLoader::TomlConfigLoader(const std::filesystem::path& configFile) {
     toml::table tbl;
@@ -41,4 +41,4 @@ ports::ConfigLoader::LogConfig TomlConfigLoader::logConfig() const {
 
 std::filesystem::path TomlConfigLoader::dbPath() const { return dbPath_; }
 
-}  // namespace planning::adapter_config
+}  // namespace planning::config

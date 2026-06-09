@@ -10,7 +10,7 @@
 #include "trunk/domain/RecurrenceRule.hpp"
 #include "trunk/domain/TimeRange.hpp"
 
-namespace planning::adapter_sqlite {
+namespace planning::store {
 
 namespace {
 
@@ -181,4 +181,4 @@ void SqliteEventRepository::remove(domain::Event::Id id) {
     s.exec();
 }
 
-}  // namespace planning::adapter_sqlite
+}  // namespace planning::store

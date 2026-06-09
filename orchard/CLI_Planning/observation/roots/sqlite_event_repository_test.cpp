@@ -9,7 +9,7 @@
 #include "trunk/domain/TimeRange.hpp"
 #include "support/sqlite_test_db.hpp"
 
-using planning::adapter_sqlite::SqliteEventRepository;
+using planning::store::SqliteEventRepository;
 using planning::domain::Event;
 using planning::domain::RecurrenceFrequency;
 using planning::domain::RecurrenceRule;

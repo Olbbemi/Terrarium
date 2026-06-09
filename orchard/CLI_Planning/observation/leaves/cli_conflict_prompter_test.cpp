@@ -7,7 +7,7 @@
 #include "trunk/domain/ConflictDetector.hpp"
 #include "trunk/domain/TimeRange.hpp"
 
-using planning::adapter_cli::CliConflictPrompter;
+using planning::ui::CliConflictPrompter;
 using Choice = planning::ports::ConflictPrompter::Choice;
 
 namespace {

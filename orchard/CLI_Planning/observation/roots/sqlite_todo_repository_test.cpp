@@ -9,7 +9,7 @@
 #include "trunk/domain/Todo.hpp"
 #include "support/sqlite_test_db.hpp"
 
-using planning::adapter_sqlite::SqliteTodoRepository;
+using planning::store::SqliteTodoRepository;
 using planning::domain::Priority;
 using planning::domain::Todo;
 using planning::test::makeMigratedDatabase;

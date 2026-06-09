@@ -13,7 +13,7 @@
 // 타임존 변환은 std::chrono 타임존 라이브러리를 쓴다. zone 인자는 기본값으로
 // current_zone()(시스템 로컬, 정책 A)을 쓰되, 테스트는 locate_zone 으로 명시 주입한다.
 // (libstdc++ current_zone() 은 TZ 환경변수를 무시하고 /etc/localtime 만 보므로 주입형으로 설계.)
-namespace planning::adapter_cli {
+namespace planning::ui {
 
 // 로컬 civil(broken-down) 시각 → UTC sys_seconds.
 std::chrono::sys_seconds localCivilToUtc(
@@ -56,4 +56,4 @@ domain::RecurrenceFrequency parseFrequency(const std::string& s);
 // RecurrenceFrequency → "매일|매주|매월|매년".
 const char* frequencyText(domain::RecurrenceFrequency f);
 
-}  // namespace planning::adapter_cli
+}  // namespace planning::ui

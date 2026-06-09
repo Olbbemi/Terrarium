@@ -53,7 +53,7 @@ namespace pa = planning::application;
 
 // CLI 입출력 변환(파싱·포맷·로컬↔UTC·진행 막대)은 테스트 가능한 leaves 어댑터로 분리.
 // 여기서는 그 이름들을 그대로 끌어와 사용한다.
-using namespace planning::adapter_cli;
+using namespace planning::ui;
 
 // 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A). 벽시계를 읽으므로 Composition Root 에 둔다.
 std::chrono::sys_days localTodayDate() {
@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
     if (initCmd->parsed()) {
         try {
             const std::string toml =
-                planning::adapter_config::renderDefaultConfig(initDb, initLog);
+                planning::config::renderDefaultConfig(initDb, initLog);
             std::ofstream out(configPath, std::ios::trunc);  // 항상 덮어쓰기
             if (!out) {
                 throw std::runtime_error("설정 파일을 쓸 수 없습니다: " + configPath);
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
 
     try {
         // --- Composition Root ---
-        planning::adapter_config::TomlConfigLoader config(configPath);
+        planning::config::TomlConfigLoader config(configPath);
         const auto lc = config.logConfig();
         toolshed::log::SpdlogLogger logger(toolshed::log::Config{
             .name = "planning",
@@ -234,12 +234,12 @@ int main(int argc, char** argv) {
         auto db = toolshed::sqlite::Database::open(config.dbPath());
         toolshed::sqlite::MigrationRunner(db).run(TERRARIUM_MIGRATIONS_DIR);
 
-        planning::adapter_sqlite::SqliteEventRepository eventRepo(db);
-        planning::adapter_sqlite::SqliteTodoRepository todoRepo(db);
-        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db);
+        planning::store::SqliteEventRepository eventRepo(db);
+        planning::store::SqliteTodoRepository todoRepo(db);
+        planning::store::SqliteGoalRepository goalRepo(db);
         planning::domain::ConflictDetector detector;
         planning::domain::StdUuidGenerator idGen;
-        planning::adapter_cli::CliConflictPrompter prompter(std::cin, std::cout);
+        planning::ui::CliConflictPrompter prompter(std::cin, std::cout);
 
         pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, prompter,
                                            logger);

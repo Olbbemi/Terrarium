@@ -4,7 +4,7 @@
 
 #include "trunk/ports/ConfigLoader.hpp"
 
-namespace planning::adapter_config {
+namespace planning::config {
 
 // TOML 설정 파일을 읽어 ConfigLoader 를 구현. 파일/파싱/필수필드 오류 시 std::runtime_error.
 class TomlConfigLoader : public ports::ConfigLoader {
@@ -19,4 +19,4 @@ private:
     std::filesystem::path dbPath_;
 };
 
-}  // namespace planning::adapter_config
+}  // namespace planning::config

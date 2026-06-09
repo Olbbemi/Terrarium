@@ -14,7 +14,7 @@ namespace toolshed::sqlite {
 class Database;
 }
 
-namespace planning::adapter_sqlite {
+namespace planning::store {
 
 class SqliteTodoRepository : public ports::TodoRepository {
 public:
@@ -37,4 +37,4 @@ private:
     SQLite::Database& db_;
 };
 
-}  // namespace planning::adapter_sqlite
+}  // namespace planning::store

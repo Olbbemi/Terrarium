@@ -7,8 +7,8 @@
 #include "climate/DefaultConfig.hpp"
 #include "climate/TomlConfigLoader.hpp"
 
-using planning::adapter_config::renderDefaultConfig;
-using planning::adapter_config::TomlConfigLoader;
+using planning::config::renderDefaultConfig;
+using planning::config::TomlConfigLoader;
 
 namespace {
 

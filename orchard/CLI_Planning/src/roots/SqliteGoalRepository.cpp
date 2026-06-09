@@ -9,7 +9,7 @@
 #include "toolshed/sqlite/Database.hpp"
 #include "trunk/domain/Goal.hpp"
 
-namespace planning::adapter_sqlite {
+namespace planning::store {
 
 namespace {
 
@@ -102,4 +102,4 @@ void SqliteGoalRepository::remove(domain::Goal::Id id) {
     s.exec();
 }
 
-}  // namespace planning::adapter_sqlite
+}  // namespace planning::store

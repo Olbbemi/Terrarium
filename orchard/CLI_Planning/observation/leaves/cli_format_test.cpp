@@ -8,7 +8,7 @@
 #include "trunk/domain/Priority.hpp"
 #include "trunk/domain/RecurrenceRule.hpp"
 
-namespace pac = planning::adapter_cli;
+namespace pac = planning::ui;
 using planning::domain::Priority;
 using planning::domain::RecurrenceFrequency;
 

@@ -7,7 +7,7 @@
 
 #include "climate/TomlConfigLoader.hpp"
 
-using planning::adapter_config::TomlConfigLoader;
+using planning::config::TomlConfigLoader;
 
 namespace {
 

@@ -8,7 +8,7 @@
 #include "trunk/domain/Goal.hpp"
 #include "support/sqlite_test_db.hpp"
 
-using planning::adapter_sqlite::SqliteGoalRepository;
+using planning::store::SqliteGoalRepository;
 using planning::domain::Goal;
 using planning::test::makeMigratedDatabase;
 

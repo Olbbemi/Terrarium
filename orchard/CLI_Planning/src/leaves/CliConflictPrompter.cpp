@@ -6,7 +6,7 @@
 
 #include "trunk/domain/ConflictDetector.hpp"
 
-namespace planning::adapter_cli {
+namespace planning::ui {
 
 CliConflictPrompter::CliConflictPrompter(std::istream& in, std::ostream& out)
     : in_(in), out_(out) {}
@@ -27,4 +27,4 @@ ports::ConflictPrompter::Choice CliConflictPrompter::promptOnConflict(
     return Choice::CANCEL;
 }
 
-}  // namespace planning::adapter_cli
+}  // namespace planning::ui

@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <stdexcept>
 
-namespace planning::adapter_cli {
+namespace planning::ui {
 
 using namespace std::chrono;
 
@@ -112,4 +112,4 @@ const char* frequencyText(domain::RecurrenceFrequency f) {
     return "?";
 }
 
-}  // namespace planning::adapter_cli
+}  // namespace planning::ui

@@ -1,666 +1,476 @@
-# 설계: CLI 기반 일정 관리툴 (Kyklos Gaia / CLI_Planning)
+# 설계: 일정관리툴 — 상주 FTXUI TUI 재설계 (v2)
 
-> **확정 핸드오프** — 체크리스트(2026-05-31-1940) 사용자 승인 완료. 03 구현 단계에서 Terrarium 테마 디렉토리 명명 개정 반영 (11장 #16).
+> **02 설계 확정 (2026-06-09).** 흐름 B3 재설계. 완료 기준 체크리스트 승인됨(`2026-06-09-2033-checklist.md`). 3단계(구현) 입력으로 사용한다.
+>
+> v1(원샷 CLI, 현재 as-built) 설계 전체는 `archive/handoff-2026-06-09-0935.md` 참조. 도메인/코어 인터페이스·결정은 v1과 동일하며 코드(현 `seed/stem/stomata`, 목표 `trunk`)에 존재한다. 본 v2 문서는 **바뀌는 것(구조·UI·충돌 흐름)** 을 상세화하고, **안 바뀌는 코어** 는 코드/archive 참조로 둔다.
 
 ---
 
 ## 1. 적용 흐름
 
-**A. 새 프로젝트** — 신규 C++ CLI 일정 관리툴.
+**B (기존 코드 변경) — 세부 B3 (기능 추가 + 리팩터링).**
 
-**사유:** 01 요구사항 "현재 상태: N/A (신규 프로젝트)" 와 일치. 기존 코드 없음, 도메인 + 어댑터 구조를 처음부터 설계.
+- **기능 추가**: 원샷 CLI(명령 1회 실행 후 종료) -> 구동이 유지되는 전체화면 FTXUI 대시보드 TUI.
+- **리팩터링**: 디렉토리/모듈 재구성 — 헥사고날 8분할을 역할 모듈로 합치고, 도메인-무관 인프라를 공유 모듈 `toolshed`로 추출.
 
----
-
-## 2. 현재 상태
-
-N/A — 신규 프로젝트이므로 기존 코드 없음.
+**사유**: 01의 "현재 상태 N/A(신규)"가 아니라, 이미 138 테스트 green인 as-built 위에서 동작 확장 + 구조 개편을 동시 수행. facet 분석(`analyze/facet/`)을 현재 구조 입력으로 사용(스킬 신규 규칙대로).
 
 ---
 
-## 3. 모듈 구조
+## 2. 현재 상태 (as-built)
 
-**분할 기준:** Hexagonal (Ports & Adapters) — 외부 시스템(SQLite, CLI, 로거, 설정 파일)을 어댑터 안에 격리, 도메인은 외부를 모름. NF3 (어댑터 확장 정책) 충족.
+- 헥사고날 8 모듈: `seed/stem/stomata/roots/rings/climate/leaves/glass` + `nutrients`(벤더). 빌드 타깃 `planning_core / planning_roots / rings / climate / leaves` + 실행파일 `gaia`.
+- `glass/main.cpp` = 거대 Composition Root + if/else 디스패치. argv 1회 파싱 -> 유스케이스 1회 -> 출력 -> **종료(one-shot)**. 예외는 top-level catch -> stderr + exit 1.
+- event/todo/goal CRUD + `init` + dashboard 동작, 테스트 **138 green**.
+- 상세 구조: `analyze/facet/architecture.md`·`flow.md`. v1 설계 전체: `archive/handoff-2026-06-09-0935.md`.
 
-### 3-1. 모듈 목록 + 책임
+---
 
-> **Terrarium 테마 디렉토리 명명** (개정 — 11장 #16 참조): 디렉토리 이름을 식물 부위/외부 투입물 은유로 교체. 헥사고날 구조·책임·인터페이스 시그니처·결정은 불변. 코드 네임스페이스(`planning::domain` 등)와 빌드 타깃 이름은 본 초안 단계에서 그대로 유지(복기 시 재정비 가능).
+## 3. 모듈 구조 (target)
 
-| 디렉토리 (구 이름) | 역할 | 은유 | 빌드 타깃 |
+### 3-1. 원칙
+
+"무조건 합치기"가 아니라 **엉킨 건 쪼개고, 과하게 쪼갠 건 합친다**.
+
+- `seed+stem+stomata` -> 과하게 쪼개진 "두뇌"라 **하나(`trunk`)로 합침**.
+- `roots`(sqlite 어댑터) -> 범용 플럼빙 + Event 매핑이 **엉켜 있어 쪼갬** (`toolshed/sqlite` + `roots`).
+
+### 3-2. 워크스페이스 지형
+
+```
+Terrarium/                      git repo (전체 한 repo)
+├── orchard/                    앱 우산 (구 fruit 가칭)
+│   └── CLI_Planning/           이 앱 (이름 유지, 추후 재고)
+│       └── src/
+│           ├── trunk/          core: 도메인+유스케이스+포트 (구 seed+stem+stomata)
+│           ├── roots/          store: 도메인-인지 sqlite 저장소 (Event 매핑)
+│           ├── leaves/         ui: FTXUI 화면 + CLI 출력 포맷 + 프롬프트
+│           └── glass/          app: 진입점 + 조립 (Composition Root)
+└── toolshed/                   공유 범용 인프라 (구 kit 가칭, fruit와 형제)
+    ├── sqlite/                 연결/WAL/마이그레이션/RAII 래퍼 (구 roots의 범용 절반)
+    └── log/                    Logger 인터페이스 + spdlog 구현 (구 rings)
+```
+
+의존 방향: `glass -> roots/leaves -> trunk -> toolshed`. `toolshed`가 맨 아래(도메인-free), `orchard` 안을 절대 모름. 순환 없음.
+
+### 3-3. 이름 매핑
+
+| 새 이름 | 역할 | 구 이름 | 비고 |
 |---|---|---|---|
-| `seed/` (domain) | Entity (Event, Todo, Goal), VO (TimeRange, Priority), Domain Service (ConflictDetector), 도메인 인터페이스 (IdGenerator) | 생명의 설계도·정체성, 가장 안쪽 | `libplanning_core` |
-| `stem/` (application) | UseCase (16개), Command/Query 객체 | 줄기 — 도메인↔외부 신호·양분 전달 | `libplanning_core` |
-| `stomata/` (ports) | Repository / Logger / ConfigLoader 인터페이스 (구현은 어댑터에) | 기공 — 외부와 교환하는 인터페이스 구멍 | `libplanning_core` |
-| `roots/` (adapter_sqlite) | EventRepository / TodoRepository / GoalRepository 구현, MigrationRunner (SQLiteCpp 사용) | 뿌리 — substrate에서 데이터 흡수·저장 | `libplanning_adapter_sqlite` (driven) |
-| `leaves/` (adapter_cli) | ArgParser (CLI11), InteractiveSelect (FTXUI), Dispatcher (Command 변환 + UseCase 호출) | 잎 — 빛·공기(사용자 입력) 수용 | `libplanning_adapter_cli` (driving) |
-| `rings/` (adapter_logger) | Logger 구현 (spdlog) | 나이테 — 성장 이력(감사·디버그 로그) | `libplanning_adapter_logger` (driven) |
-| `climate/` (adapter_config) | ConfigLoader 구현 (toml++) | 기후 — 자라는 환경 조건(설정) | `libplanning_adapter_config` (driven) |
-| `glass/main.cpp` (main) | 진입점, 위 라이브러리 조립 + 의존성 주입 | 유리병 — 전체를 담아 조립하는 그릇 | `gaia` 실행 파일 |
+| `orchard/` | 앱 우산(여러 앱) | (없음) | 나무들이 선 정원 구역. Terrarium보다 한 단계 아래 |
+| `toolshed/` | 공유 범용 인프라 | (없음) | 키퍼의 도구창고. 도메인-free, 추출 준비 완료 구역 |
+| `trunk/` | 도메인+유스케이스+포트 | seed+stem+stomata | 줄기 — roots/leaves가 붙는 중심 몸통 |
+| `roots/` | 도메인-인지 저장소 | roots(의 도메인 절반) | substrate에서 흡수·저장 |
+| `leaves/` | UI(FTXUI+포맷) | leaves | 빛·공기(사용자 입력) 수용 |
+| `glass/` | 진입점·조립 | glass | 전체를 담아 조립하는 그릇 |
+| `toolshed/sqlite` | sqlite 범용 플럼빙 | roots(의 범용 절반) | 연결/WAL/마이그레이션/RAII |
+| `toolshed/log` | Logger + spdlog | rings | — |
+| (앱쪽 잔류) `climate` | 설정 로딩(toml++) | climate | config는 9할이 앱 스키마라 toolshed 미추출 |
 
-### 3-2. 디렉토리 구조
+### 3-4. 재사용 경계 기준
 
-```
-CLI_Planning/
-├─ src/
-│  ├─ seed/                   (domain)
-│  ├─ stem/                   (application)
-│  │  ├─ commands/
-│  │  └─ queries/
-│  ├─ stomata/                (ports)
-│  ├─ roots/                  (adapter_sqlite)
-│  ├─ leaves/                 (adapter_cli)
-│  ├─ rings/                  (adapter_logger)
-│  ├─ climate/                (adapter_config)
-│  └─ glass/
-│     └─ main.cpp             (Composition Root)
-├─ nutrients/                 (외부 의존성, NF6 in-tree vendoring)
-│  ├─ SQLiteCpp/
-│  ├─ CLI11/
-│  ├─ FTXUI/
-│  ├─ nlohmann-json/
-│  ├─ json-schema-validator/
-│  ├─ spdlog/
-│  ├─ stduuid/
-│  ├─ toml++/
-│  └─ googletest/
-├─ seasons/                   (migrations)
-│  └─ 001_init.sql
-├─ observation/               (tests)
-│  ├─ seed/
-│  ├─ stem/
-│  └─ roots/ (외 adapter_*)
-├─ CMakeLists.txt
-└─ README.md
-```
+추출 가능 여부 = **"그 코드가 도메인(Event/Todo/Goal)을 아는가."**
 
-### 3-3. 의존 관계 (단방향, 순환 없음)
+- 모르는 범용 코드(sqlite 연결관리, spdlog 로거) -> `toolshed`로 추출. 나중에 `toolshed`를 위로 `mv`하면 형제 앱이 공유(지금은 Terrarium 안 공유).
+- 아는 코드(SqliteEventRepository = Event 매핑) -> 앱(`roots`)에 잔류.
+- "외부 라이브러리를 쓰는가"만으로 판단하면 오판(config가 toml++ 쓰지만 범용 알맹이 ~1줄) -> **실제 코드의 범용 알맹이 크기를 확인**.
+
+### 3-5. 의존 다이어그램
 
 ```mermaid
-graph TB
-    subgraph Driving["Driving Adapters (입력)"]
-        CLI["leaves (adapter_cli)<br/>CLI11 + FTXUI"]
+flowchart TB
+    glass["glass (app) — Composition Root"]
+    leaves["leaves (ui) — FTXUI/포맷"]
+    roots["roots (store) — Event 매핑 저장소"]
+    trunk["trunk (core) — 도메인+유스케이스+포트"]
+    subgraph toolshed
+      tsq["toolshed/sqlite — 연결/마이그레이션/RAII"]
+      tlog["toolshed/log — Logger+spdlog"]
     end
 
-    subgraph Core["libplanning_core (변경 X)"]
-        APP["stem (application)<br/>UseCases + Commands/Queries"]
-        PORTS["stomata (ports)<br/>Repository/Logger/ConfigLoader (인터페이스)"]
-        DOM["seed (domain)<br/>Event/Todo/Goal + ConflictDetector"]
-
-        APP --> DOM
-        APP --> PORTS
-    end
-
-    subgraph Driven["Driven Adapters (출력)"]
-        DB["roots (adapter_sqlite)<br/>SQLiteCpp"]
-        LOG["rings (adapter_logger)<br/>spdlog"]
-        CFG["climate (adapter_config)<br/>toml++"]
-    end
-
-    CLI --> APP
-    DB -.implements.-> PORTS
-    LOG -.implements.-> PORTS
-    CFG -.implements.-> PORTS
-
-    MAIN["glass/main.cpp<br/>gaia 실행 파일"] --> CLI
-    MAIN --> DB
-    MAIN --> LOG
-    MAIN --> CFG
+    glass --> leaves
+    glass --> roots
+    glass --> trunk
+    leaves --> trunk
+    roots --> trunk
+    roots --> tsq
+    trunk --> tlog
 ```
 
-**의존 방향 규칙:**
+### 3-6. 네임스페이스 스킴
 
-- core 는 어댑터 / 외부 라이브러리를 절대 import 안 함 — core 헤더는 SQLite, CLI11, spdlog 등에 대해 모름
-- adapter 는 core 의 ports 인터페이스를 implement
-- main.cpp 만 모든 모듈을 알고 조립 (Composition Root)
+원칙: **독립 코드 단위마다 자기 루트 네임스페이스, 조직용 우산 디렉토리(orchard)는 ns에 안 들어감.** OSS는 자기 upstream ns 유지(`SQLite::`/`spdlog::`/`toml::`/`ftxui::`/`uuids::`...), `nutrients/`는 스킴 밖.
 
-→ 미래에 LLM / Voice / GUI 어댑터 추가 시 core 손대지 않음 (NF3 충족).
+| 디렉토리 | 네임스페이스 |
+|---|---|
+| trunk/domain | `planning::domain` |
+| trunk/usecase | `planning::application` |
+| trunk/ports | `planning::ports` |
+| roots | `planning::store` |
+| leaves | `planning::ui` |
+| glass | `planning::app` |
+| climate | `planning::config` |
+| toolshed/sqlite | `toolshed::sqlite` |
+| toolshed/log | `toolshed::log` |
+
+`planning::`(앱)과 `toolshed::`(공유)는 형제 루트. 미래 앱 beta는 `beta::`(orchard:: 안 붙음). 뎁스 3 유지(`planning::domain::Event`, `toolshed::sqlite::Database`).
 
 ---
 
 ## 4. 인터페이스 명세
 
-### 4-1. Domain Layer (`src/seed/`)
+### 4-1. 불변 (코어)
 
-**Event (Aggregate Root):**
+도메인(`Event/Todo/Goal/TimeRange/RecurrenceRule/Priority/ConflictDetector/IdGenerator`)과 저장소/ConfigLoader 포트 시그니처는 **v1과 동일**. 코드 및 `archive/handoff-2026-06-09-0935.md` 4-1/4-2 참조. 디렉토리만 `seed/stem/stomata -> trunk`로 이동, 네임스페이스는 3-6.
+
+### 4-2. 변경 — 충돌 2-phase (단일 execute + force)
+
+`CreateEventUseCase`/`UpdateEventUseCase`에서 `ConflictPrompter` 의존 제거. **단일 `execute(cmd, force=false)` + 판별 Result**:
 
 ```cpp
-namespace planning::domain {
-
-class Event {
-public:
-    using Id = uuids::uuid;
-
-    Event(Id id, std::string title, TimeRange range,
-          std::optional<RecurrenceRule> recurrence = std::nullopt);
-
-    Id id() const;
-    const std::string& title() const;
-    const TimeRange& timeRange() const;
-    std::optional<RecurrenceRule> recurrenceRule() const;
-
-    void reschedule(TimeRange newRange);
-    void rename(std::string newTitle);
-    void setRecurrence(std::optional<RecurrenceRule> rule,
-                       std::optional<std::chrono::sys_seconds> until);
+namespace planning::application {
+struct CreateEventResult {
+    std::optional<domain::Conflict>  conflict;   // set -> 충돌로 미저장
+    std::optional<domain::Event::Id> createdId;  // set -> 저장됨
 };
-
+class CreateEventUseCase {
+public:
+    CreateEventUseCase(ports::EventRepository&, const domain::ConflictDetector&,
+                       domain::IdGenerator&, toolshed::log::Logger&);  // ConflictPrompter 없음
+    CreateEventResult execute(CreateEventCommand cmd, bool force = false);
+};
 }
 ```
 
-**TimeRange (Value Object, 불변):**
+- `execute(cmd)`(force=false): 검증 -> 감지 -> 충돌이면 `{conflict}`(미저장), 아니면 저장 `{createdId}`.
+- `execute(cmd, true)`: 검증 -> 저장(감지 생략).
+- **세 갈래**: 성공(`createdId`) / 충돌(`conflict`, 정상 반환 -> 되묻기) / 입력 무효(throw -> 에러). **충돌은 예외 아님**(정상 분기).
+- `UpdateEvent` 동일(`UpdateEventResult{conflict, updated}`, 시간 변경 시만 재검사). 비충돌 유스케이스는 v1 그대로.
+
+### 4-3. 신규 — toolshed/sqlite (얇게, 라이프사이클만)
 
 ```cpp
-class TimeRange {
+namespace toolshed::sqlite {
+class Database {                              // RAII + WAL/foreign_keys/busy_timeout PRAGMA
 public:
-    TimeRange(std::chrono::sys_seconds start,
-              std::optional<std::chrono::sys_seconds> end,
-              bool allDay = false);   // start <= end 불변식 검증
-
-    std::chrono::sys_seconds start() const;
-    std::optional<std::chrono::sys_seconds> end() const;
-    bool isAllDay() const;
-
-    bool overlaps(const TimeRange& other) const;
+    static Database open(const std::filesystem::path& dbPath);
+    SQLite::Database& handle();               // store가 SQLiteCpp로 직접 SQL
 };
+class MigrationRunner {                       // 메커니즘만 (디렉토리 적용 + schema_version)
+public:
+    explicit MigrationRunner(Database&);
+    void run(const std::filesystem::path& migrationsDir);
+};
+}
 ```
 
-**Todo (Aggregate Root):**
+라이프사이클(열기/마이그레이션/RAII)만 공유. SQL 추상화 안 함(`handle()`로 SQLiteCpp 노출, store는 DB 어댑터라 수용). `.sql`은 앱(`seasons/`). 두껍게(자체 Statement API)는 SQLiteCpp 재발명 + 포트가 이미 격리라 과잉 -> 기각.
+
+### 4-4. 신규 — toolshed/log (범용 Logger facade)
 
 ```cpp
-enum class Priority { HIGH, MEDIUM, LOW };
-
-class Todo {
-public:
-    using Id = uuids::uuid;
-
-    Todo(Id id, std::string title, Priority priority,
-         std::vector<std::string> tags,
-         std::optional<std::chrono::sys_days> due = std::nullopt);
-
-    Id id() const;
-    const std::string& title() const;
-    bool isDone() const;
-    Priority priority() const;
-    const std::vector<std::string>& tags() const;
-    std::optional<std::chrono::sys_days> dueDate() const;
-
-    void markDone();
-    void rename(std::string newTitle);
-    void updatePriority(Priority p);
-    void addTag(std::string tag);
-    void removeTag(const std::string& tag);
-    void setDueDate(std::optional<std::chrono::sys_days> due);
+namespace toolshed::log {
+struct Config {                              // toolshed 자체 범용 Config (앱 무관)
+    std::string name;                        // 주체별 고유 식별자 (spdlog 레지스트리 충돌 방지)
+    std::filesystem::path path;
+    std::string level; bool audit; std::string rotation;
+    int debugRetentionDays, auditRetentionDays; bool separateDebugAudit;
 };
-```
-
-**Goal (Aggregate Root):**
-
-```cpp
-class Goal {
-public:
-    using Id = uuids::uuid;
-
-    Goal(Id id, std::string name, int targetValue, std::string unit,
-         std::chrono::sys_days periodStart, std::chrono::sys_days periodEnd);
-
-    Id id() const;
-    const std::string& name() const;
-    int targetValue() const;
-    int currentValue() const;
-    const std::string& unit() const;
-    std::chrono::sys_days periodStart() const;
-    std::chrono::sys_days periodEnd() const;
-
-    void incrementCounter();  // +1
-    void rename(std::string newName);
-    void updateTarget(int newTarget);
-    void updatePeriod(std::chrono::sys_days start, std::chrono::sys_days end);
-
-    double progressRatio() const;
-};
-```
-
-**ConflictDetector (Domain Service):**
-
-```cpp
-struct Conflict {
-    Event::Id existingEventId;
-    std::string existingTitle;
-    TimeRange existingRange;
-};
-
-class ConflictDetector {
-public:
-    std::optional<Conflict> detect(const TimeRange& candidate,
-                                    const std::vector<Event>& existingOverlapping) const;
-};
-```
-
-**IdGenerator (Domain 추상 + stduuid 구현):**
-
-```cpp
-class IdGenerator {
-public:
-    virtual ~IdGenerator() = default;
-    virtual uuids::uuid next() = 0;
-};
-```
-
-### 4-2. Ports (`src/stomata/`)
-
-```cpp
-namespace planning::ports {
-
-class EventRepository {
-public:
-    virtual ~EventRepository() = default;
-    virtual std::optional<domain::Event> findById(domain::Event::Id) const = 0;
-    virtual std::vector<domain::Event> findOverlapping(const domain::TimeRange&) const = 0;
-    virtual std::vector<domain::Event> findInRange(std::chrono::sys_days start,
-                                                    std::chrono::sys_days end) const = 0;
-    virtual std::vector<domain::Event> findAll() const = 0;
-    virtual void save(const domain::Event&) = 0;
-    virtual void update(const domain::Event&) = 0;
-    virtual void remove(domain::Event::Id) = 0;
-};
-
-class TodoRepository {
-public:
-    virtual ~TodoRepository() = default;
-    virtual std::optional<domain::Todo> findById(domain::Todo::Id) const = 0;
-    virtual std::vector<domain::Todo> findByDueDate(std::chrono::sys_days) const = 0;
-    virtual std::vector<domain::Todo> findOverdue(std::chrono::sys_days today) const = 0;
-    virtual std::vector<domain::Todo> findByTag(const std::string&) const = 0;
-    virtual std::vector<domain::Todo> findByPriority(domain::Priority) const = 0;
-    virtual std::vector<domain::Todo> findAll() const = 0;
-    virtual void save(const domain::Todo&) = 0;
-    virtual void update(const domain::Todo&) = 0;
-    virtual void remove(domain::Todo::Id) = 0;
-};
-
-class GoalRepository {
-public:
-    virtual ~GoalRepository() = default;
-    virtual std::optional<domain::Goal> findById(domain::Goal::Id) const = 0;
-    virtual std::optional<domain::Goal> findByName(const std::string&) const = 0;
-    virtual std::vector<domain::Goal> findAll() const = 0;
-    virtual void save(const domain::Goal&) = 0;
-    virtual void update(const domain::Goal&) = 0;
-    virtual void remove(domain::Goal::Id) = 0;
-};
-
-class Logger {
+class Logger {                               // v1 planning::ports::Logger 이주
 public:
     virtual ~Logger() = default;
     virtual void debug(const std::string&) = 0;
-    virtual void info(const std::string&) = 0;
-    virtual void warn(const std::string&) = 0;
+    virtual void info (const std::string&) = 0;
+    virtual void warn (const std::string&) = 0;
     virtual void error(const std::string&) = 0;
     virtual void audit(const std::string& action, const std::string& detail) = 0;
 };
-
-class ConfigLoader {
+class SpdlogLogger : public Logger {
 public:
-    struct LogConfig {
-        std::filesystem::path path;
-        std::string level;              // "DEBUG"/"INFO"/"WARN"/"ERROR"
-        bool audit;
-        std::string rotationStrategy;   // "daily"/"size"/"none"
-        int debugRetentionDays;
-        int auditRetentionDays;
-        bool separateDebugAudit;
-    };
-
-    virtual ~ConfigLoader() = default;
-    virtual LogConfig logConfig() const = 0;
-    virtual std::filesystem::path dbPath() const = 0;
+    static std::unique_ptr<Logger> create(const Config&);
 };
-
-class ConflictPrompter {
-public:
-    enum class Choice { ADD_ANYWAY, CANCEL };
-    virtual ~ConflictPrompter() = default;
-    virtual Choice promptOnConflict(const domain::Conflict&) = 0;
-};
-
-class TodoSelector {  // (B) 패턴 인터랙티브 선택
-public:
-    virtual ~TodoSelector() = default;
-    virtual std::optional<domain::Todo::Id> selectFrom(const std::vector<domain::Todo>&) = 0;
-};
-// EventSelector / GoalSelector 동일 패턴
-
 }
 ```
 
-### 4-3. Application Layer (`src/stem/`)
+`Logger` 인터페이스를 toolshed에 둠 (**(A) 범용 facade**) -> trunk가 `toolshed::log::Logger` 의존. 로깅은 cross-cutting facade라 허용(SLF4J식). (B)포트 유지=재사용 깨짐, (C)브리지=과함 -> 기각. **인스턴스-per-주체**(싱글톤 아님): 각 주체가 자기 Config(자기 name/path)로 만들어 독립 파일. 앱(`planning::config`)이 TOML -> Config 매핑.
 
-**Command 객체 예시 (대표 3개, 나머지 동일 패턴):**
-
-```cpp
-struct CreateEventCommand {
-    std::string title;
-    std::chrono::sys_seconds start;
-    std::optional<std::chrono::sys_seconds> end;
-    bool allDay;
-    std::optional<RecurrenceRule> recurrence;
-    std::optional<std::chrono::sys_seconds> recurrenceUntil;
-};
-
-struct AddTodoCommand {
-    std::string title;
-    Priority priority;
-    std::vector<std::string> tags;
-    std::optional<std::chrono::sys_days> due;
-};
-
-struct LogGoalCommand {
-    std::string goalName;
-};
-```
-
-→ 16개 UseCase 모두 `XxxCommand` 또는 `XxxQuery` 입력, `Result` 객체 반환. NF4 JSON Schema 는 각 Command/Result 의 직렬화 모양을 명세.
-
-**UseCase 예시 — CreateEventUseCase:**
+### 4-5. 신규 — ui/TuiApp
 
 ```cpp
-class CreateEventUseCase {
+namespace planning::ui {
+struct UseCases {                            // 16개 개별 인자 대신 묶음 주입
+    application::CreateEventUseCase&  createEvent;
+    application::ListEventsUseCase&   listEvents;
+    // ... todo/goal CRUD + LogGoal + ShowDashboard 전부
+};
+class TuiApp {
 public:
-    CreateEventUseCase(ports::EventRepository& events,
-                       const domain::ConflictDetector& detector,
-                       domain::IdGenerator& idGen,
-                       ports::ConflictPrompter& prompter,
-                       ports::Logger& logger);
-
-    struct Result {
-        std::optional<domain::Event::Id> createdId;
-        bool cancelledByUser;
-    };
-
-    Result execute(CreateEventCommand cmd);
+    TuiApp(UseCases usecases, toolshed::log::Logger& logger);
+    int run();                               // FTXUI 루프, 종료코드 (q 또는 fatal)
 };
-```
-
-### 4-4. Driven Adapters
-
-| 어댑터 | 구현 인터페이스 | 사용 라이브러리 | 주요 책임 |
-|---|---|---|---|
-| `roots/SqliteEventRepository` | `ports::EventRepository` | SQLiteCpp | SQL 직접 작성, prepared statement, RAII 관리 |
-| `roots/SqliteTodoRepository` | `ports::TodoRepository` | SQLiteCpp | 동일 |
-| `roots/SqliteGoalRepository` | `ports::GoalRepository` | SQLiteCpp | 동일 |
-| `roots/MigrationRunner` | (내부) | SQLiteCpp | `migrations/` 디렉토리 읽고 schema_version 갱신 |
-| `rings/SpdlogLogger` | `ports::Logger` | spdlog (fmt 번들) | 디버그 / 감사 분리 sink |
-| `climate/TomlConfigLoader` | `ports::ConfigLoader` | toml++ | TOML 파싱 + 검증 |
-
-### 4-5. Driving Adapters
-
-| 어댑터 | 구현 인터페이스 | 사용 라이브러리 | 주요 책임 |
-|---|---|---|---|
-| `leaves/ArgParser` | (내부) | CLI11 | argv → 서브커맨드 + 옵션 파싱 |
-| `leaves/Dispatcher` | (내부) | — | 파싱 결과 → Command 객체 → UseCase 호출 |
-| `leaves/CliConflictPrompter` | `ports::ConflictPrompter` | — | stdin/stdout 으로 충돌 안내 |
-| `leaves/FtxuiSelector` | `ports::TodoSelector` 등 | FTXUI | 인터랙티브 선택 + 페이지네이션 |
-
-### 4-6. 외부 시스템 연동 정책
-
-| 시스템 | 타임아웃 / 재시도 | 에러 처리 | 테스트 mock |
-|---|---|---|---|
-| **SQLite** | `PRAGMA busy_timeout=5000` (5초). SQLiteCpp 가 SQLITE_BUSY 내부 재시도 | `SQLite::Exception` → adapter 가 도메인 예외로 변환 | in-memory SQLite (`":memory:"`) 또는 fake Repository 구현 |
-| **파일 시스템 (로그/config)** | OS 디폴트 | `std::filesystem::filesystem_error` → 친화적 메시지로 변환 | tmp 디렉토리 / mock ConfigLoader |
-| **stdin/stdout (CLI 프롬프트)** | — | EOF / 비TTY 환경 검출 시 자동 취소 | mock ConflictPrompter |
-
-### 4-7. 진입점 (main.cpp, Composition Root)
-
-```cpp
-int main(int argc, char** argv) {
-    auto config = adapter_config::loadFromCli(argc, argv);
-    auto logger = adapter_logger::SpdlogLogger::create(config->logConfig());
-    auto db = adapter_sqlite::openDatabase(config->dbPath());  // WAL + 마이그레이션
-
-    adapter_sqlite::SqliteEventRepository eventRepo(db);
-    adapter_sqlite::SqliteTodoRepository  todoRepo(db);
-    adapter_sqlite::SqliteGoalRepository  goalRepo(db);
-
-    domain::ConflictDetector conflictDetector;
-    auto idGen = std::make_unique<domain::StdUuidGenerator>();
-
-    adapter_cli::CliConflictPrompter prompter;
-    adapter_cli::FtxuiTodoSelector todoSelector;
-    // ...
-
-    application::CreateEventUseCase createEventUC(
-        eventRepo, conflictDetector, *idGen, prompter, *logger);
-    // ... 16개 UseCase
-
-    adapter_cli::Dispatcher dispatcher(/* UseCase 들 + Selector + logger */);
-    return dispatcher.dispatch(argc, argv);
 }
 ```
+
+내부(구현, 명세 외): 패널(Today/Events/Todos/Goals) + 모달(입력 폼/충돌) + view-state + 포커스/선택.
+
+**포트 2개 제거**(대시보드 모델의 단순화):
+- `ConflictPrompter` 제거 — (가) 2-phase에서 유스케이스가 prompter를 안 부름. 충돌은 `Result.conflict`로 와서 TuiApp이 인라인 모달(CLI는 main이 `[y/N]`). 포트 자체 불필요.
+- `TodoSelector/EventSelector/GoalSelector` 제거 — 선택이 대시보드 패널 안(FTXUI Menu)으로 흡수. TuiApp이 선택 -> id 내부 해소.
+
+### 4-6. 보류 (의식적) — 자연어 파서
+
+seam = "입력 -> Command DTO"는 **이미 존재**(Command DTO들이 그것). 폼이 Command 직접 채움(현 슬라이스), 자연어(미래)는 같은 Command 생성. **지금 투기적 파서 인터페이스를 만들지 않음** — async/의도분류/스트리밍 등 LLM-의존 부분이라 그때 현실에 맞춰 정의. 교차검증 통과(함정 없음). 알려진 LLM-단계 고려사항: NL은 "타입 모르는 Command"를 내므로 **Command -> 유스케이스 디스패치**가 새로 필요(폼은 패널+키로 회피). 보류 기록 — `code-design-deferral-slot-gap` 메모 + 9장.
 
 ---
 
-## 5. 데이터 흐름
+## 5. 데이터 흐름 (TUI)
 
-각 시나리오 상세 다이어그램은 `flows/` 디렉토리 참조.
+> v1의 `flows/NN-*.md`는 원샷 CLI 흐름이라 stale(추후 archive/갱신 대상). 아래가 v2 흐름.
 
-### 5-1. 시나리오 목록
+### 5-1. 뼈대
 
-| 파일 | 시나리오 | UseCase |
-|---|---|---|
-| `flows/01-event-add-with-conflict.md` | Event 추가 (충돌 발생) | CreateEventUseCase |
-| `flows/02-todo-done-interactive.md` | Todo 완료 (인터랙티브 선택 B) | MarkTodoDoneUseCase + TodoSelector |
-| `flows/03-show-dashboard.md` | Dashboard 자동 표시 (F8) | ShowDashboardUseCase |
-| `flows/99-error-handling.md` | 에러 처리 흐름 | (전역 정책) |
+```mermaid
+flowchart TB
+    main["glass/main: 조립 (config/db/repos/usecases)"]
+    main -->|argv 서브커맨드 있음| oneshot["기존 one-shot 디스패치 (공존 유지)"]
+    main -->|무인자| tui["leaves/ui: TuiApp.run()"]
+    tui --> load["초기 view-state 적재<br/>ListEvents(today)/ListTodos(overdue)/ListGoals"]
+    load --> render["FTXUI 패널 렌더 (view-state 읽음)"]
+    render --> key{키 입력}
+    key -->|1-4 / 화살표| nav["활성 패널·선택 변경"] --> render
+    key -->|a/e| modal["모달 폼 -> XxxCommand"] --> uc
+    key -->|d/x/l| sel["선택 -> Mark/Delete/Log Command"] --> uc
+    uc["해당 유스케이스 호출"] --> res{결과}
+    res -->|성공| refresh["영향 패널 재조회 -> view-state 갱신"] --> render
+    res -->|에러| toast["에러 토스트/배너"] --> render
+    key -->|q| quit["루프 종료 -> teardown"]
+```
 
-새 시나리오 추가 시 `flows/NN-<topic>.md` 파일로 추가하고 본 표에 한 줄 추가.
+- **유스케이스 주입**: TuiApp이 glass에서 유스케이스 참조를 받음. 코어 불변, leaves/ui만 신규.
+- **갱신 모델**: 모든 변경 후 해당 패널 조회 유스케이스 재호출 -> view-state 재구성 -> FTXUI 재렌더. 증분 캐시 없음("변경 시 재조회"), NF1(<200ms 인덱스 조회)이라 비용 작음.
 
-### 5-2. 상태 변경 지점
+### 5-2. 충돌 흐름 (2-phase, event add/edit 한정)
 
-| 지점 | 트리거 |
-|---|---|
-| SQLite write | Repository.save/update/remove |
-| 감사 로그 append | UseCase 진입 + 종료 |
-| 디버그 로그 append | UseCase 내부 흐름 + 외부 시스템 호출 |
+충돌 = **Event 시간 겹침(도메인)**. Todo/Goal 무관. back-to-back(경계 맞닿음)은 겹침 아님.
+
+```mermaid
+flowchart TB
+    submit["'a' 제출 -> CreateEventCommand"] --> detect["usecase.detectConflict(cmd)"]
+    detect --> q{충돌?}
+    q -->|없음| commit["commit(cmd) -> 저장"]
+    q -->|있음| cmodal["상태기반 충돌 모달 (렌더 루프 안)"]
+    cmodal --> choice{사용자}
+    choice -->|추가 강행| commitf["commit(cmd, force) -> 저장"]
+    choice -->|취소| close["모달 닫음"]
+    choice -.->|미래: 자유대화| reissue["재일정 등 새 cmd -> detect 재시도"]
+    commit --> refresh2["영향 패널 재조회"]
+    commitf --> refresh2
+    refresh2 --> render2["재렌더"]
+    close --> render2
+```
+
+점선(자유대화 재일정)은 LLM 단계 경로 — 지금 미구현이나 2-phase라 자리가 비워져 있음. `UpdateEvent`도 이 흐름 공유(수정 시 충돌 재검사).
+
+### 5-3. 입력 검증 (2층)
+
+- **UI 파싱(구문)**: 문자열 -> 타입. 실패 시 **UI에서 종료** — Command 안 만들고 유스케이스 호출 안 함. 해당 필드 인라인 에러, 모달 유지.
+- **도메인 불변식(의미)**: 파싱 성공 후 유스케이스 실행 중 도메인이 throw(start>end, 빈 제목, target<=0 등). UI가 catch -> 모달 배너, 모달 유지.
+- **원칙**: UI는 도메인 규칙을 복제하지 않음(DRY, 단일 권위). 도메인은 파싱 안 되는 문자열을 영영 못 봄. 성공만 모달 닫음.
+
+### 5-4. 에러 모델 (상주 = 안 죽음)
+
+- **부트스트랩(루프 전)**: config/DB/마이그레이션 에러 -> stderr + 종료(one-shot 그대로, DB 없이 TUI 못 띄움). `init` 거동 동일.
+- **루프(TUI 가동 후)**: 모든 액션 핸들러 try/catch -> 에러 표시 + 로그 + **루프 계속**. 종료 조건 = 사용자 q, 또는 FTXUI 렌더/터미널 실패(fatal, 최소집합)뿐. 잡힌 유스케이스/도메인 예외로는 종료 안 함.
+- 표시: 모달 액션=모달 배너 / 비모달(d/x/l)=하단 토스트 / 조회 실패=패널 에러 상태. 로깅은 Logger 포트로 그대로.
+
+### 5-5. 포커스 / 액션 컨텍스트
+
+같은 키라도 활성 패널 따라 의미가 달라지고, **하단 액션바가 활성 패널 따라 가변**.
+
+| 패널 | a 추가 | e 수정 | d 완료 | x 삭제 | 기타 | / 필터 |
+|---|---|---|---|---|---|---|
+| Today | - | - | - | - | 읽기전용 개요 | - |
+| Events | O | O | - | O | - | 기간(today/week/range) |
+| Todos | O | O | O | O | - | tag/priority |
+| Goals | O | O | - | O | `l`: +1 기록 | - |
+
+- Today 읽기전용(중복 조작 방지). Goal `l`=`LogGoalUseCase` 카운터 +1(N/undo는 9-1대로 기각, 모달·충돌 없음).
+- 빈 패널: 선택 대상 없으니 `a`만 활성, placeholder 표시.
+- 페이지네이션: 명시적 페이지 대신 **패널 내 스크롤**(FTXUI Menu, 선택 따라 스크롤). 각 패널 독립 스크롤.
 
 ---
 
 ## 6. 비기능 요구사항 대응
 
-| 항목 | 대응 방안 |
-|---|---|
-| **성능 (NF1, NF2)** | SQLite 인덱스 5개 (D3-C: start_ts, end_ts, due_date, priority, tag), WAL 모드 (D3-A), prepared statement (SQLiteCpp), 인덱스 적용된 쿼리만 사용 (full scan 회피) |
-| **보안 (인증/인가)** | N/A — 로컬 1인 도구, 외부 시스템 격리 |
-| **보안 (로컬 데이터, NF7)** | data.db 권한 0600 (첫 생성 시 chmod 적용), 평문 SQLite (추후 SQLCipher 전환 가능) |
-| **확장성 (사용자)** | N/A — 1인 영구 |
-| **확장성 (NF3 어댑터)** | Hexagonal Ports/Adapters — 신규 어댑터 = 새 빌드 타깃 추가 + main.cpp 조립 변경. core 코드 손 안 댐. ports/ 인터페이스가 어댑터 계약 |
-| **가용성** | N/A — 1인 로컬 도구, 다운타임 개념 없음 |
-| **호환성 (NF5)** | std::filesystem / std::chrono 등 C++20 표준만 사용. 모든 외부 라이브러리 (SQLiteCpp/CLI11/FTXUI/spdlog/stduuid/toml++) cross-platform Linux+macOS 지원 검증 |
-| **운영 (로깅, F9)** | spdlog 1.17.0 + 번들 fmt, 디버그/감사 분리 sink, 회전/보존 모두 설정 파일에서 사용자 조정 |
-| **운영 (설정, D2)** | TOML 형식, `--config` CLI 인자만, 부재 시 error + README 예시 동봉. 모든 운영 항목 (위치/회전/레벨/감사) 설정 파일 노출 |
-| **빌드 (NF6)** | CMake + Ninja, GCC 13+ / Clang 16+, external/ in-tree vendoring, SQLite 만 시스템 link, 자유 라이선스만 (Public Domain / MIT / BSD-3) |
+- **성능/보안(로컬)/호환성/운영(로깅)/빌드**: v1과 동일. archive 6장 참조.
+- **확장성(NF3 어댑터)**: 헥사고날 유지. TUI는 새 driving 어댑터(leaves/ui), 코어 불변.
+- **재사용성(신규)**: `toolshed`가 도메인-free 격리 구역. 규칙 — `toolshed`는 `orchard` 안을 절대 import 안 함. 두 번째 소비자 등장 시 `mv`로 상위 추출(재작성 아님). 현재는 Terrarium 내부 공유까지만(전자 미선택, 후자=경계만 깨끗이).
 
 ---
 
 ## 7. 전환 경로
 
-N/A — 신규 프로젝트이므로 기존 시스템에서 전환 없음.
+원칙: (1) 리팩터링으로 자리부터 만들고 그 위에 기능을 얹는다, (2) 매 단계 끝에서 빌드 + 138 테스트 green. "대격변"은 동작 0 변화 이동들의 연속이라 기존 테스트가 가드.
+
+### Phase A — 리팩터링 (동작 불변, 매 단계 138 green)
+
+| 단계 | 내용 |
+|---|---|
+| A0 | 베이스라인 고정: 미커밋분 커밋 + 138 green 확인 |
+| A1 | 최상위 골격: `orchard/` + `toolshed/` + 최상위 CMake, `CLI_Planning` -> `orchard/` 이동(순수 경로) |
+| A2 | `trunk` 병합: seed+stem+stomata -> trunk (include/CMake 갱신, 네임스페이스 유지) |
+| A3 | `toolshed/log` 추출: rings + Logger 인터페이스 (cross-dir 빌드 첫 확립, 쉬운 것부터) |
+| A4 | `toolshed/sqlite` 추출 + `roots` 분리 (가장 위험 — 새 추상화 경계 작성). 하위 분할: |
+| A4a | 범용 플럼빙(연결/마이그레이션/RAII)을 toolshed/sqlite로 얇게 추출, 저장소는 그대로 통과 |
+| A4b | 저장소를 새 경계 경유 재배선 — **Event 하나만** 먼저(통합 테스트로 가드) |
+| A4c | Todo/Goal 저장소 동일 패턴 |
+| A5 | 잔정리: config(climate) 자리 확정, leaves->ui 정착, namespace/gaia 제거 착수 |
+| A6 | 충돌 흐름 2-phase 역전(CLI 동작 보존, 테스트 green). Phase B의 다리 |
+
+-> **A6 끝 = 목표 레이아웃 완성. one-shot CLI 그대로, 138 green. 출하 가능 마일스톤.** 동작은 한 톨도 안 바뀜.
+
+### Phase B — 기능 (TUI 얹기, CLI 공존)
+
+| 단계 | 내용 |
+|---|---|
+| B1 | 상주 루프 골격: `gaia` 무인자 -> 루프 진입(최소), argv 서브커맨드 공존 유지 |
+| B2 | FTXUI 대시보드 읽기: 패널 뷰, 기존 조회 유스케이스 재사용, 쓰기 없음 |
+| B3 | 입력 모달 + 쓰기: a/e/d/x/l -> Command -> 유스케이스, 2-phase 충돌 |
+| B4 | 파서 포트 seam: 자연어 파서 포트 자리만(보류 기록) |
+
+**롤백**: 각 단계 독립 커밋. 문제 시 해당 단계만 revert. A 단계는 전부 동작 보존이라 revert해도 기능 손실 없음.
 
 ---
 
 ## 8. TDD 계획
 
-테스트 단위 = UseCase + Repository 인터페이스 + Domain Service 의 공개 API. 실제 코드는 07 테스트 단계에서 작성.
+단위 = 모듈 공개 인터페이스. happy -> 실패 -> edge 순. 코드 스켈레톤 없음. B3라 **A(회귀 방지) + B(신규)** 두 묶음 + TUI는 GUI 경계라 단위 제외 -> **C(수동 QA)**.
 
-### 8-1. Domain Layer
+### 8-A. 회귀 방지 (리팩터링 가드)
 
-| 단위 | happy | 실패 | edge |
-|---|---|---|---|
-| TimeRange | construct_valid, overlaps_true, overlaps_false, all_day_no_end | throws_when_start_after_end | back_to_back_no_overlap, overlaps_self |
-| Event | construct_with_required, reschedule_updates_range, set_recurrence_persists | throws_when_title_empty | recurrence_until_null_infinite |
-| Todo | construct_with_optional_due, mark_done, add_tag, remove_tag | throws_when_title_empty | add_duplicate_tag_idempotent |
-| Goal | increment_counter, progress_ratio, rename, update_target, update_period | throws_when_target_non_positive, throws_when_period_invalid | progress_ratio_capped_or_over_100 |
-| ConflictDetector | returns_none_no_overlap, returns_first_conflict_when_overlap | — | empty_existing_returns_none |
+**8-A-1. 손 안 대는 것** — v1 138 중 계약 불변 전부. A1~A6 리팩터링이 green 유지하는지로 검증(케이스 불변, include/namespace 같은 배선만 기계적 수정 허용, 재작성 없음):
+- 도메인 전부(TimeRange/Event/Todo/Goal/ConflictDetector)
+- 비충돌 유스케이스(DeleteEvent, ListEvents, Todo 5종, Goal 6종, ShowDashboard)
+- 어댑터(Sqlite 저장소 3종=`toolshed::sqlite::Database` 경유, TomlConfigLoader, ArgParser+Dispatcher), E2E 3흐름
+- 이주만 되는 `MigrationRunner`/`SpdlogLogger`의 **기존** 케이스도 여기(가드). 새 표면은 8-B-3/8-B-4.
+- 상세 케이스는 `archive/handoff-2026-06-09-0935.md` 8장.
 
-### 8-2. Application Layer (UseCase)
+**8-A-2. 계약 변경 -> 폐기 후 B로 대체** — ConflictPrompter 제거로 시그니처 바뀌는 `CreateEvent`/`UpdateEvent`. prompter 충돌 케이스 3개(`returns_id_on_user_accept_conflict`, `returns_cancelled_on_user_decline_conflict`, `returns_cancelled_on_user_decline_after_change`) 폐기. 비충돌 케이스 포함 전체 재명세는 8-B-1/8-B-2(반환 `id`->`createdId`).
 
-| UseCase | happy | 실패 | edge |
-|---|---|---|---|
-| CreateEventUseCase | persists_and_returns_id, with_recurrence_sets_rule, returns_id_on_user_accept_conflict | returns_cancelled_on_user_decline_conflict | all_day_no_end, invalid_time_range_throws |
-| UpdateEventUseCase | persists_changes, re-checks_conflict | returns_cancelled_on_user_decline_after_change | partial_update_only_changed_fields |
-| DeleteEventUseCase | removes_event | throws_when_not_found | delete_recurring_removes_all_instances |
-| ListEventsUseCase | filter_today, filter_week, filter_range, includes_recurring_instances | — | empty_returns_empty |
-| AddTodoUseCase | persists_with_tags, persists_without_due | throws_when_title_empty | empty_tags_list |
-| UpdateTodoUseCase | persists_partial_changes | throws_when_not_found | rename_to_same_value_no_op |
-| MarkTodoDoneUseCase | updates_status, audit_logged | throws_when_not_found | idempotent_for_already_done |
-| DeleteTodoUseCase | removes_todo_and_tags_cascade | throws_when_not_found | — |
-| ListTodosUseCase | filter_today, filter_overdue, filter_tag, filter_priority | — | empty_returns_empty, combined_filters |
-| CreateGoalUseCase | persists_with_required | throws_when_name_duplicate | — |
-| UpdateGoalUseCase | persists_changes | throws_when_not_found, rename_to_existing_throws | — |
-| DeleteGoalUseCase | removes_goal | throws_when_not_found | — |
-| LogGoalUseCase | increments_by_one, persists_update | throws_when_not_found_by_name | after_period_end_still_works |
-| ShowGoalUseCase | returns_progress_ratio, ascii_bar_format | throws_when_not_found | completed_at_100_percent |
-| ListGoalsUseCase | returns_all_goals | — | empty_returns_empty |
-| ShowDashboardUseCase | returns_today_events_count, returns_overdue_todos_count | — | empty_returns_zero_zero |
+### 8-B. 신규 (Phase B 단위, 전부 공개 API)
 
-### 8-3. Adapter Layer (통합 테스트)
+**8-B-1. `CreateEventUseCase.execute`** (2-phase, force 분기; 충돌=Result 분기/예외 아님, 불변식=throw)
 
-| 어댑터 | happy | 실패 | edge |
-|---|---|---|---|
-| SqliteEventRepository | save_findById_roundtrip, findOverlapping_uses_index, findInRange_filters | findById_returns_nullopt_when_not_found | performance_10K_events_p95_lt_200ms |
-| SqliteTodoRepository | save_with_tags_persists_join_rows, remove_cascades_tags, findByTag_returns_matching | priority_invalid_throws (CHECK constraint) | overdue_excludes_done, performance_5K_p95_lt_200ms |
-| SqliteGoalRepository | findByName_returns_goal, name_unique_constraint_throws_on_duplicate | — | rename_persists_name_change |
-| MigrationRunner | initial_run_creates_all_tables, skip_already_applied, apply_new_migration | invalid_sql_rolls_back_transaction | — |
-| TomlConfigLoader | parses_valid_config, logConfig_matches_toml_values | missing_file_throws, invalid_toml_throws, missing_required_field_throws | optional_field_uses_default |
-| SpdlogLogger | debug_writes_to_debug_sink, audit_writes_to_audit_sink (separate=true), rotation_creates_new_file_on_date_change | — | filesystem_error_falls_back_to_stderr |
-| ArgParser + Dispatcher | event_add_invokes_CreateEventUseCase_with_command, no_args_invokes_ShowDashboard | missing_required_option_prints_help, unknown_subcommand_prints_help | help_flag_prints_help_and_exits_zero |
-
-### 8-4. E2E (선택, in-memory DB)
-
-| 시나리오 | 케이스 |
+| 구분 | 케이스 |
 |---|---|
-| Event 흐름 | event_add_then_list_returns_added |
-| Todo 흐름 | todo_add_then_done_then_list_excludes |
-| Goal 흐름 | goal_add_then_log_5x_then_show_returns_50_percent |
+| happy | `no_conflict_persists_and_returns_createdId`, `with_recurrence_sets_rule`, `overlap_returns_conflict_unsaved`(force=false, 미기록), `force_commits_despite_overlap` |
+| 실패 | `invalid_time_range_throws`, `empty_title_throws` |
+| edge | `all_day_no_end_persists`, `back_to_back_not_conflict`, `force_with_no_overlap_persists_normally` |
+
+**8-B-2. `UpdateEventUseCase.execute`** (2-phase, 시간 변경 시만 재검사)
+
+| 구분 | 케이스 |
+|---|---|
+| happy | `non_time_change_persists_without_recheck`, `time_change_no_overlap_persists`, `time_change_overlap_returns_conflict_unsaved`, `force_commits_despite_overlap` |
+| 실패 | `throws_when_not_found`, `invalid_time_range_throws` |
+| edge | `partial_update_only_changed_fields`, `back_to_back_after_move_not_conflict` |
+
+**8-B-3. `toolshed::sqlite::Database`** (신규 라이프사이클 래퍼; MigrationRunner는 이주=가드)
+
+| 구분 | 케이스 |
+|---|---|
+| happy | `open_creates_and_opens_db_file`, `open_applies_wal_foreign_keys_busy_timeout`, `handle_exposes_sqlitecpp_for_direct_sql` |
+| 실패 | `open_throws_on_unwritable_path` |
+| edge | `open_existing_file_reuses`, `raii_releases_connection_on_scope_exit` |
+
+**8-B-4. `toolshed::log::SpdlogLogger::create`** (신규 표면 = name 기반 독립 인스턴스; sink/로테이션/fallback은 가드)
+
+| 구분 | 케이스 |
+|---|---|
+| happy | `create_from_config_returns_logger`, `distinct_names_write_independent_files`, `config_drives_path_and_level` |
+| edge | `same_name_reused_no_registry_collision`, `audit_disabled_omits_audit_sink` |
+
+### 8-C. 수동 QA (TUI, 단위 아님)
+
+TuiApp은 GUI 환경 경계라 단위 테스트 제외, 사용자 인수 테스트(UAT)로 검증. 체크리스트 -> **`qa-checklist.md`** (키 컨텍스트/충돌 모달/입력 검증/에러 루프 생존/빈 상태·스크롤/종료, 5장 흐름 1:1). 표현 로직 seam을 나중에 추출하면 해당 항목은 거기서 8-B로 이전.
 
 ---
 
-## 9. 설계 결정 기록
+## 9. 설계 결정 기록 (원장 — v1 이어받음 + v2 누적)
 
-각 결정의 "채택 / 사유 / 검토했으나 채택 안 한 대안" 을 기록.
+### 9-v1. v1 결정 (요약, 상세 archive 9장)
 
-### 9-1. Aggregate / Domain 결정
+Event Aggregate β / Goal counter(+1, undo 기각) / Todo 태그 list / UUID 내부+B패턴 / 16 UseCase 액션별 분리 / SQLiteCpp·CLI11·FTXUI·spdlog·stduuid·toml++·GoogleTest1.17 / WAL / INTEGER(unix epoch) 시간 / 인덱스 5 / 마이그레이션 자동. **모두 v2에서 유지**(도메인/인프라 불변).
 
-| 결정 | 채택 | 사유 | 검토 후 채택 안 한 대안 |
+### 9-v2. v2 결정 (이번 재설계)
+
+| 결정 | 채택 | 사유 | 기각 대안 |
 |---|---|---|---|
-| Event Aggregate 구조 | **β** — Event 단독 Aggregate + ConflictDetector Domain Service | 1인 영구 + 다중 Calendar out → Calendar wrapper 가 트리비얼. ConflictDetector 가 책임 명시적 | α — Calendar Aggregate Root + Event child |
-| Goal 누적 표현 | **(a) Counter** (`current_value: int`) | 요구사항이 시점별 집계 / undo 미요구. 명령 단위 이력은 감사 로그에 위임 | (b) GoalLog child entity 로 이력 보존 |
-| Todo 태그 저장 (도메인) | 단순 `list<string>` 임베드 | --tags 입력 + --tag 필터만, Tag entity 의 가치 없음 | 별도 Tag entity + many-to-many |
-| Todo 마감일 | **선택** (optional) | 사용자 결정 — 모든 todo 가 마감일 필수는 아님 | 필수 |
-| ID 생성 전략 | **UUID 내부 (사용자 비노출, B 패턴)** | LLM 어댑터에서 안정 식별자 가치, 사용자 입력 부담 0 | sequential numeric, Taskwarrior 식 이중 식별자 |
-| Bounded Context | 단일, 별도 명명 없음 | 다중 BC 시나리오 영구 out, 컨텍스트 분리 효과 0 | Scheduling / Planning 명명 |
-| UseCase 입자도 | **(i) 액션별 분리 (16개 클래스)** | LLM Function Calling 1:1 매핑, anemic 회피, 의존성 명시 | (ii) Entity Service 묶음 |
-| UX 패턴 (조작 명령) | **(B) 인터랙티브 선택 + 페이지네이션** | 사용자 ID 입력 부담 0, GUI 단계에서도 유사 패턴 활용 | (A) ID 직접 입력 |
-
-### 9-2. 라이브러리 결정 (D1 포함)
-
-| 라이브러리 | 채택 | 사유 | 검토 후 채택 안 한 대안 |
-|---|---|---|---|
-| SQLite | 시스템 link (NF6) | 1인 로컬, 양 OS 표준 | amalgamation in-tree (NF6 정책 외) |
-| SQLite C++ wrapper | **SQLiteCpp** | RAII 안전성, 직접 SQL 통제 (인덱스 튜닝), 디버깅 용이 | Raw C API (수동 finalize 위험), sqlite_orm (ORM 추가 추상화, 템플릿 무거움) |
-| CLI parser | **CLI11** | 서브커맨드 일급 지원, 헤더 단일 파일 | cxxopts (서브커맨드 약함), argparse (덜 성숙) |
-| TUI / 인터랙티브 | **FTXUI** | Menu 컴포넌트로 페이지네이션 + 선택 표준 처리 | ncurses (low-level), 자체 구현 (보일러플레이트) |
-| JSON 라이브러리 | **nlohmann/json** | C++ JSON 사실상 표준 | (대안 없음) |
-| JSON Schema validator | **json-schema-validator** (pboettch) | draft 7 완전 지원, 사람이 읽기 좋은 에러 메시지 | valijson (draft 7 일부 미통과) |
-| 로깅 + 포맷 | **spdlog 1.17.0 + 번들 fmt** | 가장 활성, fmt 번들로 의존성 최소화 | glog (무거움), plog, easylogging++ (인기 감소). fmt 별도 vendoring 안 함 |
-| UUID 생성 | **stduuid** | C++17 cross-platform, 표준 제안 (P0959) 기반 | libstud-uuid (덜 알려짐), libuuid (macOS 미지원 → NF5 위반) |
-| 테스트 | **GoogleTest 1.17.0 핀 고정** | Abseil 의존 도입 전 마지막 버전, 본 도구 의존성 최소화. 미래 IPC 단계 (protobuf/gRPC) 도입 시 Abseil 자연 합류 가능 | 1.17.0 이후 버전 (현 단계에서 Abseil 부담) |
-| TOML 파서 | **toml++** | 헤더 전용, C++17+, MIT | 다른 toml 라이브러리 — 비교 우위 작음 |
-
-### 9-3. 인프라 결정 (D2 + D3)
-
-| 결정 | 채택 | 사유 | 검토 후 채택 안 한 대안 |
-|---|---|---|---|
-| 설정 파일 형식 | **TOML** | 사용자 직접 편집 친화 (주석/계층), Cargo 등 친숙 | JSON (주석 X), YAML (들여쓰기 민감), INI (계층 약함) |
-| 설정 파일 위치 | **`--config` CLI 인자만, 기본값 없음** | 사용자 명시 의도. 데몬/스크립트화로 편의 확보 | XDG_CONFIG_HOME 기본값 + override, 환경 변수 (사용자 선호 외) |
-| 설정 부재 시 동작 | **error 종료 + README 예시 동봉** | 사용자 오타 즉시 인지 | auto-create (의도치 않은 곳 생성 위험), interactive setup (자동화 막힘) |
-| 로그 정책 | **모든 항목 설정 파일** (위치/회전/보존/레벨/감사/분리) | 1인 도구 사용자 통제권 최대 + 일관성 | 위치만 설정, 나머지 hard-code |
-| SQLite 저널 모드 | **WAL** | 미래 동시성 대비, "database is locked" 예방, 현대 표준 | DELETE (기본, 백업 단순) |
-| 스키마 (테이블) | events / todos / todo_tags / goals / schema_version | 도메인 모델 직역, 태그 정규화 | `todos.tags` 컬럼 JSON 임베드 (인덱스 못 씀) |
-| 시간 표현 | **INTEGER** (unix epoch seconds, UTC) | 정렬/인덱스 효율 | TEXT ISO 8601 (사람 친화) |
-| 인덱스 | 단일 인덱스 5개 (start_ts/end_ts/due_date/priority/tag) | NF1 < 200ms 충족, 쓰기 비용 작음 | 복합 인덱스 추가 (현재 충분, 부족 시 추가) |
-| 마이그레이션 | **`migrations/NNN_*.sql` + 자동 적용** | 재현 가능, 새 머신 자동 처리, 견고 | 수동 SQL (자동화 X), 코드 내 if/else (히스토리 추적 어려움) |
+| UI 형태 | 전체화면 대시보드 TUI(lazygit식) | "구동 유지 + 여러 입력" = 상주 UI | 메뉴 드릴다운, 상주 REPL |
+| 입력 방식 | 모달 폼 (현 슬라이스) | LLM API 현 범위 밖. Command seam이라 자연어로 저비용 전환 | 하단 명령줄, 자연어 즉시(보류) |
+| 자연어 파서 | **보류**(포트 자리만) | 후속 슬라이스, 같은 Command seam | (의식적 보류, 9장에 기록) |
+| 디렉토리 | 역할 모듈(trunk) + toolshed(sqlite/log) 추출 | 엉킨 건 쪼개고 과분할은 합침. 재사용 경계=도메인 인지 | 외부 전부 한 디렉토리(범용+도메인 재엉킴) |
+| config 위치 | 앱쪽 잔류(climate) | 코드 9할이 앱 스키마, 범용 알맹이 ~1줄 | toolshed 추출(도메인 누수) |
+| 워크스페이스 | Terrarium/{orchard, toolshed} | 한 repo 내 공유, repo 경계 회피 | kit를 repo 밖 형제로(submodule 복잡) |
+| 공유 범위 | 후자(경계만, 추출은 나중) | 두 번째 소비자 등장 시 mv | 전자(지금 별 repo 추출) |
+| 충돌 흐름 | (나) 2-phase 역전(detect/commit) | FTXUI 단일 루프 + LLM 대화 양쪽에 맞음. 동기 콜백은 둘 다 깨짐 | (가) ConflictPrompter 동기 콜백 유지 |
+| CLI 운명 | 공존(무인자=TUI, argv=one-shot 유지) | 스크립트/자동화 보존, 전환 안전 | 완전 대체(자동화 상실, init 곤란) |
+| 에러 모델 | 부트스트랩 exit / 루프 per-action 계속 | 상주는 한 액션 에러로 안 죽음 | top-catch-exit(원샷 그대로) |
+| 검증 분담 | UI=파싱 / 도메인=불변식 throw | DRY, 단일 권위 | UI가 불변식 선검사(규칙 복제) |
+| 네임스페이스 | 독립단위=루트(`planning::`/`toolshed::`), 우산(orchard) ns 제외 | 독립 앱/공유lib는 형제 루트, 우산은 코드단위 아님 | 경로 전체 미러(`orchard::CLI_Planning::...` 과깊음) |
+| 충돌 API 모양 | (가) 단일 `execute(cmd,force)` + 판별 Result | 비충돌 happy path 1검증, commit 재감지 불필요 | (나) detect/commit 분리(검증 2회, 재감지로 분리 흐려짐) |
+| toolshed/sqlite 두께 | 얇게(라이프사이클만, handle()로 SQLiteCpp 노출) | 공유분은 open/migrate/RAII. 포트가 이미 격리 | 두껍게(자체 Statement API = SQLiteCpp 재발명) |
+| Logger 인터페이스 위치 | (A) `toolshed::log::Logger` facade + Config.name | 로깅=cross-cutting facade(SLF4J식), 재사용 성립 | (B)코어 포트(재사용 깨짐), (C)브리지(과함) |
+| TuiApp 포트 정리 | ConflictPrompter + Selector 3종 제거 | (가)로 prompter 불필요, 선택은 패널 내부 흡수 | v1 포트 유지(대시보드 모델에 불필요) |
+| 자연어 파서 인터페이스 | 지금 정의 안 함(seam=기존 Command) | async/의도분류는 LLM-의존, 지금 박으면 틀림 | 투기적 스텁 선정의 |
+| TUI 테스트 전략 | GUI 경계라 단위 제외 -> 수동 QA(UAT) | TuiApp=driving 어댑터, run()=인터랙티브 루프라 단위 부적합 | 표현 seam 추출해 리듀서 단위화(현 매핑 무게엔 과함) |
 
 ---
 
 ## 10. 참고 자료
 
-### 10-1. 외부 출처
-
-**SQLite:**
-- SQLite 공식 문서: <https://sqlite.org>
-- WAL Mode: <https://sqlite.org/wal.html>
-- SQLiteCpp: <https://github.com/SRombauts/SQLiteCpp>
-
-**CLI / TUI:**
-- CLI11: <https://github.com/CLIUtils/CLI11>
-- FTXUI: <https://github.com/ArthurSonzogni/FTXUI>
-
-**JSON:**
-- nlohmann/json: <https://github.com/nlohmann/json>
-- json-schema-validator: <https://github.com/pboettch/json-schema-validator>
-- JSON Schema draft 7: <https://json-schema.org/specification-links.html#draft-7>
-
-**로깅:**
-- spdlog: <https://github.com/gabime/spdlog>
-- spdlog 1.17.0 릴리스: <https://github.com/gabime/spdlog/releases>
-
-**UUID:**
-- stduuid: <https://github.com/mariusbancila/stduuid>
-- C++ 표준 제안 P0959 (UUID): <https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0959r1.md>
-
-**테스트:**
-- GoogleTest: <https://github.com/google/googletest>
-
-**설정:**
-- TOML 명세 1.0: <https://toml.io/en/v1.0.0>
-- toml++: <https://github.com/marzer/tomlplusplus>
-
-**아키텍처 / 표준:**
-- Eric Evans, *Domain-Driven Design* — 도메인 모델링 원전
-- Alistair Cockburn, Hexagonal Architecture (Ports & Adapters)
-- XDG Base Directory Specification: <https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html>
-
-### 10-2. 내부 wip 자료
-
-- DDD 핵심 개념 — `CLI_Planning/knowledge/wip/domain-driven-design.md`
-- SQLite 정체와 운영 — `CLI_Planning/knowledge/wip/sqlite.md`
-- 헥사고날 정책 — wip 작성 2회 실패 (Write 권한 이슈), 차후 권한 형식 확정 후 재시도 예정
+- v1 외부 출처(SQLite/CLI11/FTXUI/spdlog/stduuid/toml++/GoogleTest 등): archive 10장.
+- FTXUI: <https://github.com/ArthurSonzogni/FTXUI> (대시보드 패널/Menu 스크롤/Modal).
+- 내부: `analyze/facet/`(as-built 분석), `archive/handoff-2026-06-09-0935.md`(v1 설계).
 
 ---
 
-## 11. 사용자와의 명확화 기록
+## 11. 사용자와의 명확화 기록 (원장 — v1 #1~16 + v2 #17~)
 
-01 단계 명확화는 01 산출물에 기록. 본 섹션은 02 단계에서 발생한 명확화 / 협의만 기록.
+### 11-v1 (요약, 상세 archive 11장)
 
-| # | 주제 | 사용자 표현 / 모호함 | 명확화 결과 |
-|---|---|---|---|
-| 1 | 산출물 저장 경로 | (01 에서 명시한 패턴 유지) | `CLI_Planning/code-design/02-design/` 하위 (01 과 동일 정책) |
-| 2 | Event Aggregate 구조 (α/β) | "1인이라고 해도 스케줄이 겹칠 수 있지 않나, 그러면 알파로 해도 비어있는거라고 보는게 맞는가" | 시간 겹침 vs 다중 캘린더 의미 차이 명확화. (i) 단일 풀 내 겹침으로 확인. β 채택, Calendar wrapper 미도입 |
-| 3 | Bounded Context 결정 효과 | "결정 목적이 뭐지", "여기서말하는 컨텍스트가 어디까지를 의미하는가", "소스 기준으로는 하나의 프로젝트로 묶을 영역으로 보이는데" | BC = 어휘 경계, 빌드 단위 = 의존 방향 강제 — 두 축 무관 명시. 본 도구 단일 BC, 별도 명명 없음. Hexagonal 빌드 타깃 분리는 별 결정 |
-| 4 | 추정 Use Case 명령 5개 추가 | 01 에 없는 `todo update/delete`, `goal update/delete/list` | CRUD 일관성 차원에서 추가 — 사용자 승인 |
-| 5 | F5 `<id>` 표기 vs B 패턴 | 01 의 `todo done <id>` 표기와 B 패턴 (ID 비노출) 불일치 | 02 에서 `<id>` 는 인터랙티브 선택 패턴으로 해석. 01 본문 직접 수정 없이 02 명확화로 정합성 유지 |
-| 6 | ID 목적 / 형식 (UUID 도입) | "id 목적이 뭔가", "사용자가 저걸 직접 입력해야만 하는가" | ID 의 5가지 역할 (참조/동일성/PK/감사/충돌 메시지) 정리. UX (A) 직접 입력 vs (B) 인터랙티브 옵션 비교 후 (B) + UUID 채택 |
-| 7 | 헥사고날 라이브러리 운명 (GUI 단계) | "나중에 GUI 환경으로 넘어가도 사용 가능한 툴들인거지?" | Driving (CLI11/FTXUI) 폐기, Driven (SQLite/spdlog) + 보조 (JSON/UUID/test) 유지 명시 |
-| 8 | GUI 키보드 입력 시나리오 | "음성을 쓰긴할텐데 그래도 cli 처럼 키보드로 입력받는 기능은 탑재할 거" | 4가지 패턴 (폼/팔레트/임베디드 CLI/자연어) 정리. 사용자 의도 = (4) 자연어 (LLM) 확인. CLI11 은 CLI 단계 한정 결정 |
-| 9 | 설정 파일 위치 결정 | "그건 설정 파일로 뺄꺼라서 파일이 저장되는 위치를 결정하는거라면 넘어가도 될듯" | 로그 위치 hard-code 결정 스킵, 설정 파일에서 사용자 지정. D2 전체를 설정 파일로 통합 |
-| 10 | 설정 파일 default 부재 | "디폴트 없이 항상 입력받는 구조로 (데몬으로 돌리던지 아니면 스크립트화 하면되므로)" | 기본값 없음, `--config` CLI 인자 필수. 환경 변수도 배제 |
-| 11 | TOML 부재 지식 | "TOML 은 처음 들어보는데" | TOML 개념 + JSON 비교 + 채택 사례 (Cargo/pyproject 등) 설명 후 채택 결정 |
-| 12 | GoogleTest Abseil 의존 | "gtest 에서 Abseil 지원안한다 어쩌고", "protobuf, grpc 이런거 나중에 쓸껀데 그래도 문제는 없는건가" | Abseil 개념 + 미래 IPC 단계에 자연스럽게 합류 시나리오 명시. 1.17.0 핀 고정이 미래 발목 잡지 않음 확인 |
-| 13 | 헥사고날 정책 wip 부재 | "헥사고날 원칙? 이거 잘 모르겠으니 이점 참고해두고" | wip 작성 2회 실패 (백그라운드 subagent Write 권한 형식 이슈). 차후 권한 형식 확정 후 재시도 (메모리 등재) |
-| 14 | 핸드오프 검토 방식 | "보기가 힘든데 이거 핸드오프에 저장할 내용인건가" | draft 파일 (`handoff.draft.md`) 에 미리 저장 → IDE 검토. 최종 승인 후 `handoff.md` 로 rename |
-| 15 | 데이터 흐름 별도 파일 분리 | "플로우는 따로 파일을 만들 수 있을까? 플로우별로" | `flows/NN-<topic>.md` 패턴으로 분리. handoff.md 5 섹션은 목록 + 표만 유지 |
-| 16 | Terrarium 테마 디렉토리 명명 (03 단계 개정) | "프로젝트이름이 테라리움이라 각 디렉토리 이름도 테라리움에 맞는걸 추가", "오픈소스 넣는 디렉토리 이름은?" | 디렉토리 이름을 식물 부위/외부 투입물 은유로 교체: domain→`seed/`, application→`stem/`, ports→`stomata/`, adapter_sqlite→`roots/`, adapter_cli→`leaves/`, adapter_logger→`rings/`, adapter_config→`climate/`, main→`glass/main.cpp`, external→`nutrients/`, migrations→`seasons/`, tests→`observation/`. 헥사고날 구조·책임·인터페이스 시그니처·기존 결정은 불변. 코드 네임스페이스(`planning::*`, `adapter_*::`)와 빌드 타깃 이름은 초안 단계에선 유지(복기 시 재정비). "어차피 초안, 진행 후 복기"가 사용자 기조 |
+#1 저장경로 / #2 Event Aggregate β / #3 단일 BC / #4 추정 UseCase 5개 추가 / #5 F5 id->B패턴 / #6 ID 목적·UUID / #7 헥사고날 라이브러리 GUI 운명 / #8 GUI 키보드 입력=자연어(LLM) / #9 설정파일 위치 / #10 설정 default 부재 / #11 TOML / #12 GoogleTest Abseil / #13 헥사고날 wip 부재 / #14 핸드오프 draft 검토 / #15 데이터흐름 flows 분리 / #16 Terrarium 테마 명명.
+
+### 11-v2 (이번 세션)
+
+| # | 주제 | 명확화 결과 |
+|---|---|---|
+| 17 | UI 형태 | "구동 유지 + 여러 입력" = 전체화면 대시보드 TUI(lazygit식) |
+| 18 | 입력 방식 / 1->3 전환 | 모달 폼으로 시작, 자연어는 같은 Command seam이라 저비용. 파서 포트는 보류(미구현 자리만) |
+| 19 | 디렉토리 불만 / 재사용 | "너무 기능적으로 쪼갬" -> 역할 모듈 병합 + toolshed 추출. 재사용 경계="도메인 인지 여부". config 앱쪽 |
+| 20 | 워크스페이스 지형 | Terrarium 하위 orchard(앱 우산)/toolshed(형제). 이름=식물 메타포(trunk/roots/leaves/glass/orchard/toolshed) |
+| 21 | 충돌 흐름 가/나 | LLM 대화 입력 관점에서 동기 콜백(가)이 깨짐 -> (나) 2-phase 역전 채택 |
+| 22 | 충돌 정의 | Event 시간 겹침(도메인). Todo/Goal 무관. back-to-back 허용 |
+| 23 | 입력 검증 분담 | UI=파싱(실패는 UI에서 끝) / 도메인=불변식 throw 잡아 표시. UI는 규칙 복제 안 함 |
+| 24 | 에러 모델 | 부트스트랩 exit / 루프 per-action catch+계속(상주 안 죽음), fatal 최소 |
+| 25 | Goal log | +1 고정(N/undo는 9-1대로 기각) |
+| 26 | 포커스/액션 | Today 읽기전용, 액션바 활성 패널 따라 가변 |
+| 27 | 빈 상태/스크롤 | placeholder + 패널 내 스크롤(FTXUI Menu) |
+| 28 | 재설계 handoff 처리 | 옛 handoff -> archive 스냅샷, 새 handoff=target 본문+원장 이어받기. 스킬 #3에 archive 예외 보강 |
+| 29 | 네임스페이스/타입 정리 시점 | 설계단계에서 정리 적합(시그니처 전제). 독립단위=루트, 우산 ns 제외, OSS 자기 ns. 래퍼는 우리 코드라 toolshed:: |
+| 30 | 충돌 API 모양 | (가) 단일 execute+force로 교차검증 후 확정. 충돌=Result(예외 아님), 무효=throw, parse=UI 3층 |
+| 31 | toolshed/sqlite 두께 | 두껍게 이점 검토(벤더격리/에러변환/재사용/테스트) 후 얇게 채택. store가 DB어댑터라 SQLiteCpp 수용 |
+| 32 | Logger 범용성 + 식별자 | (A) facade로 최대 범용. 인스턴스-per-주체로 독립(다른 파일), Config.name으로 spdlog 레지스트리 충돌 방지 |
+| 33 | 불필요 포트 제거 | ConflictPrompter/Selector 제거 동의 ("불필요한 건 제거가 맞음") |
+| 34 | 파서 보류 교차검증 | 함정/seam깊이/async/충돌정합 4각 검증 통과. LLM 때 Command->유스케이스 디스패치 필요(고려사항 기록) |
+| 35 | TUI 테스트 범위 | GUI 영역은 단위 테스트 힘드니 사용자 E2E/QA로(QA처럼). 리듀서 seam 강제 추출 안 함. TDD=A 회귀/B 신규 단위, C=수동 QA(qa-checklist.md) |
 
 ---
 
-> 체크리스트 승인 완료, 핸드오프 확정. 03 단계 개정(테마 명명)은 11장 #16에 기록.
+## 12. 구현 이탈 기록 (v1 원장 — 상세 archive 12장)
+
+v1 03 단계 이탈 5건(빌드타깃명, UX B->A `--id`, FTXUI 셀렉터 보류, leaves ArgParser/Dispatcher 인라인, JSON 미도입)은 `archive/handoff-2026-06-09-0935.md` 12장 보존. v2에서 상당수가 본 재설계로 해소/재정의됨(예: FTXUI 셀렉터=B2 대시보드, `--id`=B패턴 인터랙티브 선택으로 복귀). v2 진행 중 발생하는 새 이탈은 본 섹션에 누적.
+
+---
+
+> 02 설계 확정. 다음 단계: 03 구현 — Phase A(리팩터링, 매 단계 138 green)부터 시작해 Phase B(TUI 얹기)로.

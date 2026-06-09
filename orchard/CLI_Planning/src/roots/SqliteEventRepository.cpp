@@ -5,9 +5,9 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-#include "seed/Event.hpp"
-#include "seed/RecurrenceRule.hpp"
-#include "seed/TimeRange.hpp"
+#include "trunk/domain/Event.hpp"
+#include "trunk/domain/RecurrenceRule.hpp"
+#include "trunk/domain/TimeRange.hpp"
 
 namespace planning::adapter_sqlite {
 

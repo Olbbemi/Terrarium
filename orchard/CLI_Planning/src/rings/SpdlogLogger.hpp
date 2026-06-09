@@ -3,8 +3,8 @@
 #include <memory>
 #include <string>
 
-#include "stomata/ConfigLoader.hpp"
-#include "stomata/Logger.hpp"
+#include "trunk/ports/ConfigLoader.hpp"
+#include "trunk/ports/Logger.hpp"
 
 namespace spdlog {
 class logger;

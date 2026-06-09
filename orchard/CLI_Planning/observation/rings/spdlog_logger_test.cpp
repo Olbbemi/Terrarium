@@ -6,7 +6,7 @@
 #include <string>
 
 #include "rings/SpdlogLogger.hpp"
-#include "stomata/ConfigLoader.hpp"
+#include "trunk/ports/ConfigLoader.hpp"
 
 using planning::adapter_logger::SpdlogLogger;
 using LogConfig = planning::ports::ConfigLoader::LogConfig;

@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-#include "stomata/ConfigLoader.hpp"
+#include "trunk/ports/ConfigLoader.hpp"
 
 namespace planning::adapter_config {
 

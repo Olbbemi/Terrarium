@@ -6,7 +6,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-#include "seed/Goal.hpp"
+#include "trunk/domain/Goal.hpp"
 
 namespace planning::adapter_sqlite {
 

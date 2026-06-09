@@ -5,7 +5,7 @@
 #include <SQLiteCpp/SQLiteCpp.h>
 
 #include "roots/SqliteGoalRepository.hpp"
-#include "seed/Goal.hpp"
+#include "trunk/domain/Goal.hpp"
 #include "support/sqlite_test_db.hpp"
 
 using planning::adapter_sqlite::SqliteGoalRepository;

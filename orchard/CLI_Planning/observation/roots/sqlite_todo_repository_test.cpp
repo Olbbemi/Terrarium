@@ -5,8 +5,8 @@
 #include <SQLiteCpp/SQLiteCpp.h>
 
 #include "roots/SqliteTodoRepository.hpp"
-#include "seed/Priority.hpp"
-#include "seed/Todo.hpp"
+#include "trunk/domain/Priority.hpp"
+#include "trunk/domain/Todo.hpp"
 #include "support/sqlite_test_db.hpp"
 
 using planning::adapter_sqlite::SqliteTodoRepository;

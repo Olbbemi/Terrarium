@@ -5,7 +5,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-#include "seed/Todo.hpp"
+#include "trunk/domain/Todo.hpp"
 
 namespace planning::adapter_sqlite {
 

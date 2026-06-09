@@ -5,8 +5,8 @@
 #include <string>
 
 #include "leaves/CliFormat.hpp"
-#include "seed/Priority.hpp"
-#include "seed/RecurrenceRule.hpp"
+#include "trunk/domain/Priority.hpp"
+#include "trunk/domain/RecurrenceRule.hpp"
 
 namespace pac = planning::adapter_cli;
 using planning::domain::Priority;

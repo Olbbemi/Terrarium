@@ -3,8 +3,8 @@
 #include <chrono>
 #include <string>
 
-#include "seed/Priority.hpp"
-#include "seed/RecurrenceRule.hpp"
+#include "trunk/domain/Priority.hpp"
+#include "trunk/domain/RecurrenceRule.hpp"
 
 // CLI 입출력 변환(엣지 어댑터). 문자열 ↔ 도메인 타입, 로컬↔UTC 타임존 변환(정책 A),
 // 진행 막대 렌더링을 모은다. main(glass)에 두면 테스트 바이너리가 링크할 수 없어

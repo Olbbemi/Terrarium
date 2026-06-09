@@ -2,7 +2,7 @@
 
 #include <iosfwd>
 
-#include "stomata/ConflictPrompter.hpp"
+#include "trunk/ports/ConflictPrompter.hpp"
 
 namespace planning::adapter_cli {
 

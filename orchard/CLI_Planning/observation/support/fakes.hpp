@@ -7,12 +7,12 @@
 #include <utility>
 #include <vector>
 
-#include "seed/IdGenerator.hpp"
-#include "stomata/ConflictPrompter.hpp"
-#include "stomata/EventRepository.hpp"
-#include "stomata/GoalRepository.hpp"
-#include "stomata/Logger.hpp"
-#include "stomata/TodoRepository.hpp"
+#include "trunk/domain/IdGenerator.hpp"
+#include "trunk/ports/ConflictPrompter.hpp"
+#include "trunk/ports/EventRepository.hpp"
+#include "trunk/ports/GoalRepository.hpp"
+#include "trunk/ports/Logger.hpp"
+#include "trunk/ports/TodoRepository.hpp"
 
 namespace planning::test {
 

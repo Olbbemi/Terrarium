@@ -4,8 +4,8 @@
 #include <sstream>
 
 #include "leaves/CliConflictPrompter.hpp"
-#include "seed/ConflictDetector.hpp"
-#include "seed/TimeRange.hpp"
+#include "trunk/domain/ConflictDetector.hpp"
+#include "trunk/domain/TimeRange.hpp"
 
 using planning::adapter_cli::CliConflictPrompter;
 using Choice = planning::ports::ConflictPrompter::Choice;

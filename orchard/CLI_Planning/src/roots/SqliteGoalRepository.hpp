@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "stomata/GoalRepository.hpp"
+#include "trunk/ports/GoalRepository.hpp"
 
 namespace SQLite {
 class Database;

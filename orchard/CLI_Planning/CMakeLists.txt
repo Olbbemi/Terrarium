@@ -17,30 +17,30 @@ add_subdirectory(nutrients/SQLiteCpp)
 # --- 테스트 (enable_testing 은 최상위 Terrarium/CMakeLists.txt) ---
 include(GoogleTest)
 
-# --- 코어 라이브러리 (seed/stem/stomata → libplanning_core) ---
+# --- 코어 라이브러리 (trunk: domain/usecase/ports → libplanning_core) ---
 add_library(planning_core
-    src/seed/TimeRange.cpp
-    src/seed/Event.cpp
-    src/seed/Todo.cpp
-    src/seed/Goal.cpp
-    src/seed/ConflictDetector.cpp
-    src/seed/StdUuidGenerator.cpp
-    src/stem/CreateEventUseCase.cpp
-    src/stem/UpdateEventUseCase.cpp
-    src/stem/DeleteEventUseCase.cpp
-    src/stem/ListEventsUseCase.cpp
-    src/stem/AddTodoUseCase.cpp
-    src/stem/MarkTodoDoneUseCase.cpp
-    src/stem/DeleteTodoUseCase.cpp
-    src/stem/UpdateTodoUseCase.cpp
-    src/stem/ListTodosUseCase.cpp
-    src/stem/CreateGoalUseCase.cpp
-    src/stem/UpdateGoalUseCase.cpp
-    src/stem/DeleteGoalUseCase.cpp
-    src/stem/LogGoalUseCase.cpp
-    src/stem/ShowGoalUseCase.cpp
-    src/stem/ListGoalsUseCase.cpp
-    src/stem/ShowDashboardUseCase.cpp
+    src/trunk/domain/TimeRange.cpp
+    src/trunk/domain/Event.cpp
+    src/trunk/domain/Todo.cpp
+    src/trunk/domain/Goal.cpp
+    src/trunk/domain/ConflictDetector.cpp
+    src/trunk/domain/StdUuidGenerator.cpp
+    src/trunk/usecase/CreateEventUseCase.cpp
+    src/trunk/usecase/UpdateEventUseCase.cpp
+    src/trunk/usecase/DeleteEventUseCase.cpp
+    src/trunk/usecase/ListEventsUseCase.cpp
+    src/trunk/usecase/AddTodoUseCase.cpp
+    src/trunk/usecase/MarkTodoDoneUseCase.cpp
+    src/trunk/usecase/DeleteTodoUseCase.cpp
+    src/trunk/usecase/UpdateTodoUseCase.cpp
+    src/trunk/usecase/ListTodosUseCase.cpp
+    src/trunk/usecase/CreateGoalUseCase.cpp
+    src/trunk/usecase/UpdateGoalUseCase.cpp
+    src/trunk/usecase/DeleteGoalUseCase.cpp
+    src/trunk/usecase/LogGoalUseCase.cpp
+    src/trunk/usecase/ShowGoalUseCase.cpp
+    src/trunk/usecase/ListGoalsUseCase.cpp
+    src/trunk/usecase/ShowDashboardUseCase.cpp
 )
 target_include_directories(planning_core PUBLIC src nutrients/stduuid/include)
 
@@ -88,27 +88,27 @@ target_link_libraries(gaia PRIVATE
 # --- 테스트 ---
 add_executable(terrarium_tests
     observation/smoke_test.cpp
-    observation/seed/time_range_test.cpp
-    observation/seed/event_test.cpp
-    observation/seed/todo_test.cpp
-    observation/seed/goal_test.cpp
-    observation/seed/conflict_detector_test.cpp
-    observation/stem/create_event_usecase_test.cpp
-    observation/stem/update_event_usecase_test.cpp
-    observation/stem/delete_event_usecase_test.cpp
-    observation/stem/list_events_usecase_test.cpp
-    observation/stem/add_todo_usecase_test.cpp
-    observation/stem/mark_todo_done_usecase_test.cpp
-    observation/stem/delete_todo_usecase_test.cpp
-    observation/stem/update_todo_usecase_test.cpp
-    observation/stem/list_todos_usecase_test.cpp
-    observation/stem/create_goal_usecase_test.cpp
-    observation/stem/update_goal_usecase_test.cpp
-    observation/stem/delete_goal_usecase_test.cpp
-    observation/stem/log_goal_usecase_test.cpp
-    observation/stem/show_goal_usecase_test.cpp
-    observation/stem/list_goals_usecase_test.cpp
-    observation/stem/show_dashboard_usecase_test.cpp
+    observation/trunk/domain/time_range_test.cpp
+    observation/trunk/domain/event_test.cpp
+    observation/trunk/domain/todo_test.cpp
+    observation/trunk/domain/goal_test.cpp
+    observation/trunk/domain/conflict_detector_test.cpp
+    observation/trunk/usecase/create_event_usecase_test.cpp
+    observation/trunk/usecase/update_event_usecase_test.cpp
+    observation/trunk/usecase/delete_event_usecase_test.cpp
+    observation/trunk/usecase/list_events_usecase_test.cpp
+    observation/trunk/usecase/add_todo_usecase_test.cpp
+    observation/trunk/usecase/mark_todo_done_usecase_test.cpp
+    observation/trunk/usecase/delete_todo_usecase_test.cpp
+    observation/trunk/usecase/update_todo_usecase_test.cpp
+    observation/trunk/usecase/list_todos_usecase_test.cpp
+    observation/trunk/usecase/create_goal_usecase_test.cpp
+    observation/trunk/usecase/update_goal_usecase_test.cpp
+    observation/trunk/usecase/delete_goal_usecase_test.cpp
+    observation/trunk/usecase/log_goal_usecase_test.cpp
+    observation/trunk/usecase/show_goal_usecase_test.cpp
+    observation/trunk/usecase/list_goals_usecase_test.cpp
+    observation/trunk/usecase/show_dashboard_usecase_test.cpp
     observation/rings/spdlog_logger_test.cpp
     observation/climate/toml_config_loader_test.cpp
     observation/climate/render_default_config_test.cpp

@@ -4,7 +4,7 @@
 #include <optional>
 #include <vector>
 
-#include "stomata/EventRepository.hpp"
+#include "trunk/ports/EventRepository.hpp"
 
 namespace SQLite {
 class Database;

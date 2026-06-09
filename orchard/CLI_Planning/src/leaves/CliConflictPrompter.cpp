@@ -4,7 +4,7 @@
 #include <ostream>
 #include <string>
 
-#include "seed/ConflictDetector.hpp"
+#include "trunk/domain/ConflictDetector.hpp"
 
 namespace planning::adapter_cli {
 

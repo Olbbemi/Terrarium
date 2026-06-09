@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "trunk/domain/IdGenerator.hpp"
-#include "trunk/ports/ConflictPrompter.hpp"
 #include "trunk/ports/EventRepository.hpp"
 #include "trunk/ports/GoalRepository.hpp"
 #include "toolshed/log/Logger.hpp"
@@ -42,22 +41,6 @@ public:
     }
 
     std::vector<std::pair<std::string, std::string>> auditLog;
-};
-
-// 미리 정한 선택을 반환하는 가짜 충돌 프롬프터. 호출 횟수 기록.
-class FakeConflictPrompter : public ports::ConflictPrompter {
-public:
-    explicit FakeConflictPrompter(Choice choice) : choice_(choice) {}
-
-    Choice promptOnConflict(const domain::Conflict&) override {
-        ++callCount;
-        return choice_;
-    }
-
-    int callCount = 0;
-
-private:
-    Choice choice_;
 };
 
 // 벡터 기반 in-memory EventRepository.

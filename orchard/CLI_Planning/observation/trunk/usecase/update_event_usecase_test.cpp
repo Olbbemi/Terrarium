@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <optional>
+#include <stdexcept>
 
 #include "trunk/domain/ConflictDetector.hpp"
 #include "trunk/domain/Event.hpp"
@@ -14,7 +16,6 @@ using planning::application::UpdateEventUseCase;
 using planning::domain::ConflictDetector;
 using planning::domain::Event;
 using planning::domain::TimeRange;
-using Choice = planning::ports::ConflictPrompter::Choice;
 
 namespace {
 
@@ -29,38 +30,33 @@ const char* kB = "22222222-2222-2222-2222-222222222222";
 
 }  // namespace
 
-TEST(UpdateEventUseCase, persists_changes) {
+// --- happy ---
+
+TEST(UpdateEventUseCase, non_time_change_persists_without_recheck) {
     planning::test::FakeEventRepository repo;
-    repo.save(Event(id(kB), "B", TimeRange(ts(300), ts(400))));
+    // A 와 B 는 시간이 겹치지만, B 의 제목만 바꾸면 재검사하지 않아야 한다.
+    repo.save(Event(id(kA), "A", TimeRange(ts(100), ts(200))));
+    repo.save(Event(id(kB), "B", TimeRange(ts(150), ts(250))));
     ConflictDetector detector;
-    planning::test::FakeIdGenerator idGen;
-    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
     planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
+    UpdateEventUseCase uc(repo, detector, logger);
 
     UpdateEventCommand cmd;
     cmd.id = id(kB);
-    cmd.title = "B2";
-    cmd.start = ts(310);
-    cmd.end = std::optional<std::chrono::sys_seconds>{ts(420)};
+    cmd.title = "B2";  // 시간 미변경
 
     auto result = uc.execute(cmd);
-    EXPECT_FALSE(result.cancelledByUser);
-    auto updated = repo.findById(id(kB));
-    ASSERT_TRUE(updated.has_value());
-    EXPECT_EQ(updated->title(), "B2");
-    EXPECT_EQ(updated->timeRange().start(), ts(310));
+    EXPECT_FALSE(result.conflict.has_value());
+    EXPECT_TRUE(result.updated);
+    EXPECT_EQ(repo.findById(id(kB))->title(), "B2");
 }
 
-TEST(UpdateEventUseCase, re_checks_conflict) {
+TEST(UpdateEventUseCase, time_change_no_overlap_persists) {
     planning::test::FakeEventRepository repo;
-    repo.save(Event(id(kA), "A", TimeRange(ts(100), ts(200))));
     repo.save(Event(id(kB), "B", TimeRange(ts(300), ts(400))));
     ConflictDetector detector;
-    planning::test::FakeIdGenerator idGen;
-    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
     planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
+    UpdateEventUseCase uc(repo, detector, logger);
 
     UpdateEventCommand cmd;
     cmd.id = id(kB);
@@ -68,90 +64,116 @@ TEST(UpdateEventUseCase, re_checks_conflict) {
     cmd.end = std::optional<std::chrono::sys_seconds>{ts(250)};
 
     auto result = uc.execute(cmd);
-    EXPECT_FALSE(result.cancelledByUser);
-    EXPECT_EQ(prompter.callCount, 1);  // 시간 변경 → A 와 충돌 재검사
+    EXPECT_FALSE(result.conflict.has_value());
+    EXPECT_TRUE(result.updated);
     EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(150));
 }
 
-TEST(UpdateEventUseCase, returns_cancelled_on_user_decline_after_change) {
+TEST(UpdateEventUseCase, time_change_overlap_returns_conflict_unsaved) {
     planning::test::FakeEventRepository repo;
     repo.save(Event(id(kA), "A", TimeRange(ts(100), ts(200))));
     repo.save(Event(id(kB), "B", TimeRange(ts(300), ts(400))));
     ConflictDetector detector;
-    planning::test::FakeIdGenerator idGen;
-    planning::test::FakeConflictPrompter prompter(Choice::CANCEL);
     planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
+    UpdateEventUseCase uc(repo, detector, logger);
+
+    UpdateEventCommand cmd;
+    cmd.id = id(kB);
+    cmd.start = ts(150);  // A 와 겹치도록 이동
+    cmd.end = std::optional<std::chrono::sys_seconds>{ts(250)};
+
+    auto result = uc.execute(cmd);  // force=false
+    EXPECT_TRUE(result.conflict.has_value());
+    EXPECT_FALSE(result.updated);
+    EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(300));  // 변경 안 됨
+    EXPECT_TRUE(logger.auditLog.empty());  // 충돌 반환은 미기록
+}
+
+TEST(UpdateEventUseCase, force_commits_despite_overlap) {
+    planning::test::FakeEventRepository repo;
+    repo.save(Event(id(kA), "A", TimeRange(ts(100), ts(200))));
+    repo.save(Event(id(kB), "B", TimeRange(ts(300), ts(400))));
+    ConflictDetector detector;
+    planning::test::FakeLogger logger;
+    UpdateEventUseCase uc(repo, detector, logger);
 
     UpdateEventCommand cmd;
     cmd.id = id(kB);
     cmd.start = ts(150);
     cmd.end = std::optional<std::chrono::sys_seconds>{ts(250)};
 
-    auto result = uc.execute(cmd);
-    EXPECT_TRUE(result.cancelledByUser);
-    EXPECT_EQ(prompter.callCount, 1);
-    EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(300));  // 변경 안 됨
+    auto result = uc.execute(cmd, /*force=*/true);
+    EXPECT_FALSE(result.conflict.has_value());
+    EXPECT_TRUE(result.updated);
+    EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(150));
 }
 
-TEST(UpdateEventUseCase, clears_end_time) {
+// --- 실패 (불변식 = throw) ---
+
+TEST(UpdateEventUseCase, throws_when_not_found) {
+    planning::test::FakeEventRepository repo;
+    ConflictDetector detector;
+    planning::test::FakeLogger logger;
+    UpdateEventUseCase uc(repo, detector, logger);
+
+    UpdateEventCommand cmd;
+    cmd.id = id(kB);
+    cmd.title = "없음";
+
+    EXPECT_THROW(uc.execute(cmd), std::out_of_range);
+}
+
+TEST(UpdateEventUseCase, invalid_time_range_throws) {
     planning::test::FakeEventRepository repo;
     repo.save(Event(id(kB), "B", TimeRange(ts(100), ts(200))));
     ConflictDetector detector;
-    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
     planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
+    UpdateEventUseCase uc(repo, detector, logger);
 
     UpdateEventCommand cmd;
     cmd.id = id(kB);
-    // 종료시각 해제: 바깥 optional 있음(변경) + 안쪽 nullopt(값 없음).
-    cmd.end = std::optional<std::chrono::sys_seconds>{std::nullopt};
+    cmd.start = ts(200);
+    cmd.end = std::optional<std::chrono::sys_seconds>{ts(100)};
 
-    auto result = uc.execute(cmd);
-    EXPECT_FALSE(result.cancelledByUser);
-    auto updated = repo.findById(id(kB));
-    ASSERT_TRUE(updated.has_value());
-    EXPECT_EQ(updated->timeRange().start(), ts(100));     // 시작 유지
-    EXPECT_FALSE(updated->timeRange().end().has_value());  // 종료 제거됨
+    EXPECT_THROW(uc.execute(cmd), std::invalid_argument);
 }
 
-TEST(UpdateEventUseCase, toggles_all_day) {
-    planning::test::FakeEventRepository repo;
-    repo.save(Event(id(kB), "B", TimeRange(ts(100), ts(200), false)));
-    ConflictDetector detector;
-    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
-    planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
-
-    UpdateEventCommand cmd;
-    cmd.id = id(kB);
-    cmd.allDay = true;
-
-    auto result = uc.execute(cmd);
-    EXPECT_FALSE(result.cancelledByUser);
-    auto updated = repo.findById(id(kB));
-    ASSERT_TRUE(updated.has_value());
-    EXPECT_TRUE(updated->timeRange().isAllDay());
-    EXPECT_EQ(updated->timeRange().start(), ts(100));  // 시간은 유지
-}
+// --- edge ---
 
 TEST(UpdateEventUseCase, partial_update_only_changed_fields) {
     planning::test::FakeEventRepository repo;
     repo.save(Event(id(kB), "원제목", TimeRange(ts(100), ts(200))));
     ConflictDetector detector;
-    planning::test::FakeIdGenerator idGen;
-    planning::test::FakeConflictPrompter prompter(Choice::ADD_ANYWAY);
     planning::test::FakeLogger logger;
-    UpdateEventUseCase uc(repo, detector, prompter, logger);
+    UpdateEventUseCase uc(repo, detector, logger);
 
     UpdateEventCommand cmd;
     cmd.id = id(kB);
     cmd.title = "새제목";  // 제목만 변경
 
     auto result = uc.execute(cmd);
-    EXPECT_FALSE(result.cancelledByUser);
+    EXPECT_FALSE(result.conflict.has_value());
+    EXPECT_TRUE(result.updated);
     auto updated = repo.findById(id(kB));
     EXPECT_EQ(updated->title(), "새제목");
     EXPECT_EQ(updated->timeRange().start(), ts(100));  // 시간 유지
-    EXPECT_EQ(prompter.callCount, 0);  // 시간 미변경 → 충돌 재검사 안 함
+}
+
+TEST(UpdateEventUseCase, back_to_back_after_move_not_conflict) {
+    planning::test::FakeEventRepository repo;
+    repo.save(Event(id(kA), "A", TimeRange(ts(100), ts(200))));
+    repo.save(Event(id(kB), "B", TimeRange(ts(300), ts(400))));
+    ConflictDetector detector;
+    planning::test::FakeLogger logger;
+    UpdateEventUseCase uc(repo, detector, logger);
+
+    UpdateEventCommand cmd;
+    cmd.id = id(kB);
+    cmd.start = ts(200);  // A 의 종료시각과 맞닿음 → 겹치지 않음
+    cmd.end = std::optional<std::chrono::sys_seconds>{ts(300)};
+
+    auto result = uc.execute(cmd);  // force=false
+    EXPECT_FALSE(result.conflict.has_value());
+    EXPECT_TRUE(result.updated);
+    EXPECT_EQ(repo.findById(id(kB))->timeRange().start(), ts(200));
 }

@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
 
         pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, logger);
         pa::ListEventsUseCase listEvents(eventRepo, logger);
-        pa::UpdateEventUseCase updateEvent(eventRepo, detector, prompter, logger);
+        pa::UpdateEventUseCase updateEvent(eventRepo, detector, logger);
         pa::DeleteEventUseCase deleteEvent(eventRepo, logger);
         pa::AddTodoUseCase addTodo(todoRepo, idGen, logger);
         pa::ListTodosUseCase listTodos(todoRepo, logger);
@@ -353,11 +353,17 @@ int main(int argc, char** argv) {
                 cmd.recurrence = std::optional<planning::domain::RecurrenceRule>{
                     makeRule(evUpRepeat, evUpUntil)};
             }
-            const auto result = updateEvent.execute(cmd);
-            if (result.cancelledByUser) {
-                std::cout << "취소되었습니다.\n";
-            } else {
+            // 2-phase: 충돌이면 사용자에게 묻고, 강행 선택 시 force 로 재실행.
+            auto result = updateEvent.execute(cmd);
+            if (result.conflict &&
+                prompter.promptOnConflict(*result.conflict) ==
+                    planning::ports::ConflictPrompter::Choice::ADD_ANYWAY) {
+                result = updateEvent.execute(cmd, /*force=*/true);
+            }
+            if (result.updated) {
                 std::cout << "이벤트 수정 완료: " << evUpId << "\n";
+            } else {
+                std::cout << "취소되었습니다.\n";
             }
         } else if (eventDelete->parsed()) {
             const auto parsed = uuids::uuid::from_string(evDelId);

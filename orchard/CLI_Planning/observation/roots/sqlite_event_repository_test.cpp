@@ -14,7 +14,7 @@ using planning::domain::Event;
 using planning::domain::RecurrenceFrequency;
 using planning::domain::RecurrenceRule;
 using planning::domain::TimeRange;
-using planning::test::makeMigratedDb;
+using planning::test::makeMigratedDatabase;
 
 namespace {
 
@@ -39,7 +39,7 @@ const char* k3 = "33333333-3333-3333-3333-333333333333";
 }  // namespace
 
 TEST(SqliteEventRepository, save_findById_roundtrip) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
 
     Event e(id(k1), "주간회의", TimeRange(ts(1000), ts(4600)),
@@ -59,7 +59,7 @@ TEST(SqliteEventRepository, save_findById_roundtrip) {
 }
 
 TEST(SqliteEventRepository, persists_all_day_flag_through_update) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
 
     repo.save(Event(id(k1), "종일", TimeRange(ts(1000), ts(4600), true)));
@@ -76,13 +76,13 @@ TEST(SqliteEventRepository, persists_all_day_flag_through_update) {
 }
 
 TEST(SqliteEventRepository, findById_returns_nullopt_when_not_found) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
     EXPECT_FALSE(repo.findById(id(k1)).has_value());
 }
 
 TEST(SqliteEventRepository, findOverlapping) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
     repo.save(Event(id(k1), "A", TimeRange(ts(100), ts(200))));
     repo.save(Event(id(k2), "B", TimeRange(ts(150), ts(250))));
@@ -94,7 +94,7 @@ TEST(SqliteEventRepository, findOverlapping) {
 }
 
 TEST(SqliteEventRepository, findInRange_filters) {
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
     repo.save(Event(id(k1), "오늘", TimeRange(atDay(20000, 10), atDay(20000, 11))));
     repo.save(Event(id(k2), "사흘후", TimeRange(atDay(20003, 10), atDay(20003, 11))));
@@ -107,7 +107,7 @@ TEST(SqliteEventRepository, findInRange_filters) {
 TEST(SqliteEventRepository, findInRange_uses_instant_boundaries) {
     // 경계가 '일 자정' 정렬이 아니라 임의 instant 여도 정확히 걸러야 한다.
     // (로컬 자정은 UTC 로 비정렬 instant — 이 슬라이스의 핵심.)
-    auto db = makeMigratedDb();
+    auto db = makeMigratedDatabase();
     SqliteEventRepository repo(db);
     repo.save(Event(id(k1), "범위안", TimeRange(atDay(20000, 5), atDay(20000, 6))));
     repo.save(Event(id(k2), "범위밖", TimeRange(atDay(20000, 20), atDay(20000, 21))));

@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
         auto db = toolshed::sqlite::Database::open(config.dbPath());
         toolshed::sqlite::MigrationRunner(db.handle()).run(TERRARIUM_MIGRATIONS_DIR);
 
-        planning::adapter_sqlite::SqliteEventRepository eventRepo(db.handle());
+        planning::adapter_sqlite::SqliteEventRepository eventRepo(db);  // 새 경계(A4b)
         planning::adapter_sqlite::SqliteTodoRepository todoRepo(db.handle());
         planning::adapter_sqlite::SqliteGoalRepository goalRepo(db.handle());
         planning::domain::ConflictDetector detector;

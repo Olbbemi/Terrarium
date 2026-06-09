@@ -61,7 +61,7 @@ add_library(planning_roots
     src/roots/SqliteGoalRepository.cpp
 )
 target_include_directories(planning_roots PUBLIC src)
-target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp)
+target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp toolshed_sqlite)
 
 # --- 어댑터: leaves (CLI driving) ---
 add_library(planning_leaves

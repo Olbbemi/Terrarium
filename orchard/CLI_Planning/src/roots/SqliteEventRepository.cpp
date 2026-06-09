@@ -5,6 +5,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
+#include "toolshed/sqlite/Database.hpp"
 #include "trunk/domain/Event.hpp"
 #include "trunk/domain/RecurrenceRule.hpp"
 #include "trunk/domain/TimeRange.hpp"
@@ -87,7 +88,8 @@ void bindBody(SQLite::Statement& s, const domain::Event& e) {
 
 }  // namespace
 
-SqliteEventRepository::SqliteEventRepository(SQLite::Database& db) : db_(db) {}
+SqliteEventRepository::SqliteEventRepository(toolshed::sqlite::Database& db)
+    : db_(db.handle()) {}
 
 std::optional<domain::Event> SqliteEventRepository::findById(
     domain::Event::Id id) const {

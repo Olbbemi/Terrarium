@@ -69,7 +69,7 @@ void expandRecurring(const domain::Event& e, sys_seconds winStart,
 }  // namespace
 
 ListEventsUseCase::ListEventsUseCase(ports::EventRepository& events,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : events_(events), logger_(logger) {}
 
 std::vector<domain::Event> ListEventsUseCase::execute(

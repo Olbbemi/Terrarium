@@ -5,11 +5,11 @@
 #include <sstream>
 #include <string>
 
-#include "rings/SpdlogLogger.hpp"
-#include "trunk/ports/ConfigLoader.hpp"
+#include "toolshed/log/Config.hpp"
+#include "toolshed/log/SpdlogLogger.hpp"
 
-using planning::adapter_logger::SpdlogLogger;
-using LogConfig = planning::ports::ConfigLoader::LogConfig;
+using toolshed::log::SpdlogLogger;
+using LogConfig = toolshed::log::Config;
 
 namespace {
 
@@ -31,10 +31,11 @@ std::string readAll(const fs::path& p) {
 
 LogConfig baseConfig(const fs::path& logPath) {
     LogConfig c;
+    c.name = "test";
     c.path = logPath;
     c.level = "DEBUG";
     c.audit = true;
-    c.rotationStrategy = "none";
+    c.rotation = "none";
     c.debugRetentionDays = 0;
     c.auditRetentionDays = 0;
     c.separateDebugAudit = true;
@@ -70,7 +71,7 @@ TEST(SpdlogLogger, audit_writes_to_audit_sink_when_separate) {
 TEST(SpdlogLogger, daily_rotation_creates_date_stamped_file) {
     auto dir = uniqueDir("daily");
     LogConfig cfg = baseConfig(dir / "app.log");
-    cfg.rotationStrategy = "daily";
+    cfg.rotation = "daily";
     cfg.separateDebugAudit = false;
     {
         SpdlogLogger logger(cfg);

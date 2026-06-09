@@ -5,7 +5,7 @@
 namespace planning::application {
 
 DeleteEventUseCase::DeleteEventUseCase(ports::EventRepository& events,
-                                       ports::Logger& logger)
+                                       toolshed::log::Logger& logger)
     : events_(events), logger_(logger) {}
 
 void DeleteEventUseCase::execute(const DeleteEventCommand& cmd) {

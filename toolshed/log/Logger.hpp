@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace planning::ports {
+namespace toolshed::log {
 
 class Logger {
 public:
@@ -15,4 +15,4 @@ public:
     virtual void audit(const std::string& action, const std::string& detail) = 0;
 };
 
-}  // namespace planning::ports
+}  // namespace toolshed::log

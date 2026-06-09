@@ -2,7 +2,7 @@
 
 #include "trunk/usecase/commands/DashboardCommands.hpp"
 #include "trunk/ports/EventRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 #include "trunk/ports/TodoRepository.hpp"
 
 namespace planning::application {
@@ -11,7 +11,7 @@ namespace planning::application {
 class ShowDashboardUseCase {
 public:
     ShowDashboardUseCase(ports::EventRepository& events,
-                         ports::TodoRepository& todos, ports::Logger& logger);
+                         ports::TodoRepository& todos, toolshed::log::Logger& logger);
 
     struct Result {
         int todayEventsCount;
@@ -23,7 +23,7 @@ public:
 private:
     ports::EventRepository& events_;
     ports::TodoRepository& todos_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

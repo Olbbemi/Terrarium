@@ -43,13 +43,8 @@ add_library(planning_core
     src/trunk/usecase/ShowDashboardUseCase.cpp
 )
 target_include_directories(planning_core PUBLIC src nutrients/stduuid/include)
-
-# --- 어댑터: rings (로깅, spdlog) ---
-add_library(planning_rings
-    src/rings/SpdlogLogger.cpp
-)
-target_include_directories(planning_rings PUBLIC src)
-target_link_libraries(planning_rings PUBLIC planning_core PRIVATE spdlog::spdlog)
+# usecase 가 toolshed::log::Logger 에 의존(공유 facade). toolshed 는 Terrarium/toolshed 에 정의.
+target_link_libraries(planning_core PUBLIC toolshed_log)
 
 # --- 어댑터: climate (설정, toml++) ---
 add_library(planning_climate
@@ -83,7 +78,7 @@ target_include_directories(gaia PRIVATE src nutrients/CLI11/include)
 target_compile_definitions(gaia PRIVATE
     TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
 target_link_libraries(gaia PRIVATE
-    planning_core planning_roots planning_rings planning_climate planning_leaves SQLiteCpp)
+    planning_core planning_roots toolshed_log planning_climate planning_leaves SQLiteCpp)
 
 # --- 테스트 ---
 add_executable(terrarium_tests
@@ -109,7 +104,7 @@ add_executable(terrarium_tests
     observation/trunk/usecase/show_goal_usecase_test.cpp
     observation/trunk/usecase/list_goals_usecase_test.cpp
     observation/trunk/usecase/show_dashboard_usecase_test.cpp
-    observation/rings/spdlog_logger_test.cpp
+    observation/toolshed/log/spdlog_logger_test.cpp
     observation/climate/toml_config_loader_test.cpp
     observation/climate/render_default_config_test.cpp
     observation/roots/migration_runner_test.cpp
@@ -123,5 +118,5 @@ target_include_directories(terrarium_tests PRIVATE observation)
 target_compile_definitions(terrarium_tests PRIVATE
     TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
 target_link_libraries(terrarium_tests PRIVATE
-    planning_core planning_rings planning_climate planning_roots planning_leaves SQLiteCpp GTest::gtest_main)
+    planning_core toolshed_log planning_climate planning_roots planning_leaves SQLiteCpp GTest::gtest_main)
 gtest_discover_tests(terrarium_tests)

@@ -5,7 +5,7 @@
 namespace planning::application {
 
 DeleteTodoUseCase::DeleteTodoUseCase(ports::TodoRepository& todos,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : todos_(todos), logger_(logger) {}
 
 void DeleteTodoUseCase::execute(const DeleteTodoCommand& cmd) {

@@ -7,7 +7,7 @@
 namespace planning::application {
 
 ShowGoalUseCase::ShowGoalUseCase(ports::GoalRepository& goals,
-                                 ports::Logger& logger)
+                                 toolshed::log::Logger& logger)
     : goals_(goals), logger_(logger) {}
 
 ShowGoalUseCase::Result ShowGoalUseCase::execute(const ShowGoalQuery& query) {

@@ -7,7 +7,7 @@
 namespace planning::application {
 
 UpdateGoalUseCase::UpdateGoalUseCase(ports::GoalRepository& goals,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : goals_(goals), logger_(logger) {}
 
 void UpdateGoalUseCase::execute(const UpdateGoalCommand& cmd) {

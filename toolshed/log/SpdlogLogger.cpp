@@ -1,4 +1,4 @@
-#include "rings/SpdlogLogger.hpp"
+#include "toolshed/log/SpdlogLogger.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -9,7 +9,7 @@
 #include <spdlog/sinks/stdout_sinks.h>
 #include <spdlog/spdlog.h>
 
-namespace planning::adapter_logger {
+namespace toolshed::log {
 
 namespace {
 
@@ -43,18 +43,18 @@ std::filesystem::path auditPath(const std::filesystem::path& p) {
 
 }  // namespace
 
-SpdlogLogger::SpdlogLogger(const ports::ConfigLoader::LogConfig& config)
+SpdlogLogger::SpdlogLogger(const Config& config)
     : auditEnabled_(config.audit) {
     try {
         auto debugSink =
-            makeSink(config.path, config.rotationStrategy, config.debugRetentionDays);
+            makeSink(config.path, config.rotation, config.debugRetentionDays);
         debug_ = std::make_shared<spdlog::logger>("debug", debugSink);
         debug_->set_level(toLevel(config.level));
         debug_->flush_on(spdlog::level::trace);
 
         spdlog::sink_ptr auditSink =
             config.separateDebugAudit
-                ? makeSink(auditPath(config.path), config.rotationStrategy,
+                ? makeSink(auditPath(config.path), config.rotation,
                            config.auditRetentionDays)
                 : debugSink;
         audit_ = std::make_shared<spdlog::logger>("audit", auditSink);
@@ -82,4 +82,4 @@ void SpdlogLogger::audit(const std::string& action, const std::string& detail) {
     audit_->info("[AUDIT] " + action + " | " + detail);
 }
 
-}  // namespace planning::adapter_logger
+}  // namespace toolshed::log

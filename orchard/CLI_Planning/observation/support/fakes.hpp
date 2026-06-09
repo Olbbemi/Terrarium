@@ -11,7 +11,7 @@
 #include "trunk/ports/ConflictPrompter.hpp"
 #include "trunk/ports/EventRepository.hpp"
 #include "trunk/ports/GoalRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 #include "trunk/ports/TodoRepository.hpp"
 
 namespace planning::test {
@@ -31,7 +31,7 @@ private:
 };
 
 // 호출을 기록만 하는 가짜 로거. audit 호출은 검증용으로 보관.
-class FakeLogger : public ports::Logger {
+class FakeLogger : public toolshed::log::Logger {
 public:
     void debug(const std::string&) override {}
     void info(const std::string&) override {}

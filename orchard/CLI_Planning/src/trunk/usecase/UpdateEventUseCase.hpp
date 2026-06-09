@@ -4,7 +4,7 @@
 #include "trunk/usecase/commands/EventCommands.hpp"
 #include "trunk/ports/ConflictPrompter.hpp"
 #include "trunk/ports/EventRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace planning::application {
 
@@ -14,7 +14,7 @@ public:
     UpdateEventUseCase(ports::EventRepository& events,
                        const domain::ConflictDetector& detector,
                        ports::ConflictPrompter& prompter,
-                       ports::Logger& logger);
+                       toolshed::log::Logger& logger);
 
     struct Result {
         bool cancelledByUser;
@@ -27,7 +27,7 @@ private:
     ports::EventRepository& events_;
     const domain::ConflictDetector& detector_;
     ports::ConflictPrompter& prompter_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

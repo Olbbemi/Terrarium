@@ -7,7 +7,7 @@
 namespace planning::application {
 
 MarkTodoDoneUseCase::MarkTodoDoneUseCase(ports::TodoRepository& todos,
-                                         ports::Logger& logger)
+                                         toolshed::log::Logger& logger)
     : todos_(todos), logger_(logger) {}
 
 void MarkTodoDoneUseCase::execute(const MarkTodoDoneCommand& cmd) {

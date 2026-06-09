@@ -13,11 +13,12 @@
 #include "climate/TomlConfigLoader.hpp"
 #include "leaves/CliConflictPrompter.hpp"
 #include "leaves/CliFormat.hpp"
-#include "rings/SpdlogLogger.hpp"
 #include "roots/MigrationRunner.hpp"
 #include "roots/SqliteEventRepository.hpp"
 #include "roots/SqliteGoalRepository.hpp"
 #include "roots/SqliteTodoRepository.hpp"
+#include "toolshed/log/Config.hpp"
+#include "toolshed/log/SpdlogLogger.hpp"
 #include "trunk/domain/ConflictDetector.hpp"
 #include "trunk/domain/Goal.hpp"
 #include "trunk/domain/Priority.hpp"
@@ -215,7 +216,17 @@ int main(int argc, char** argv) {
     try {
         // --- Composition Root ---
         planning::adapter_config::TomlConfigLoader config(configPath);
-        planning::adapter_logger::SpdlogLogger logger(config.logConfig());
+        const auto lc = config.logConfig();
+        toolshed::log::SpdlogLogger logger(toolshed::log::Config{
+            .name = "planning",
+            .path = lc.path,
+            .level = lc.level,
+            .audit = lc.audit,
+            .rotation = lc.rotationStrategy,
+            .debugRetentionDays = lc.debugRetentionDays,
+            .auditRetentionDays = lc.auditRetentionDays,
+            .separateDebugAudit = lc.separateDebugAudit,
+        });
 
         SQLite::Database db(config.dbPath().string(),
                             SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);

@@ -8,7 +8,7 @@ CreateEventUseCase::CreateEventUseCase(ports::EventRepository& events,
                                        const domain::ConflictDetector& detector,
                                        domain::IdGenerator& idGen,
                                        ports::ConflictPrompter& prompter,
-                                       ports::Logger& logger)
+                                       toolshed::log::Logger& logger)
     : events_(events),
       detector_(detector),
       idGen_(idGen),

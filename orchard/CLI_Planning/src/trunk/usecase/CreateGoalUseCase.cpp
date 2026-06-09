@@ -6,7 +6,7 @@ namespace planning::application {
 
 CreateGoalUseCase::CreateGoalUseCase(ports::GoalRepository& goals,
                                      domain::IdGenerator& idGen,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : goals_(goals), idGen_(idGen), logger_(logger) {}
 
 domain::Goal::Id CreateGoalUseCase::execute(const CreateGoalCommand& cmd) {

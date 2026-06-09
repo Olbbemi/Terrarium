@@ -18,5 +18,6 @@ enable_testing()
 # --- 앱 우산: orchard/ (현재 앱 1개: CLI_Planning) ---
 add_subdirectory(orchard/CLI_Planning)
 
-# --- 공유 범용 인프라: toolshed/ (A3 log / A4 sqlite 에서 채움) ---
-# add_subdirectory(toolshed)   # 타깃 추가 시 활성화
+# --- 공유 범용 인프라: toolshed/ (A3 log 채움 / A4 sqlite) ---
+# orchard 뒤에 둔다: toolshed/log 가 orchard 하위 nutrients 의 spdlog::spdlog 타깃에 링크.
+add_subdirectory(toolshed)

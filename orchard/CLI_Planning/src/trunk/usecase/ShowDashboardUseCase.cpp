@@ -6,7 +6,7 @@ namespace planning::application {
 
 ShowDashboardUseCase::ShowDashboardUseCase(ports::EventRepository& events,
                                            ports::TodoRepository& todos,
-                                           ports::Logger& logger)
+                                           toolshed::log::Logger& logger)
     : events_(events), todos_(todos), logger_(logger) {}
 
 ShowDashboardUseCase::Result ShowDashboardUseCase::execute(

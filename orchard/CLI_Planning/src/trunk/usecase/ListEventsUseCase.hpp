@@ -5,7 +5,7 @@
 #include "trunk/domain/Event.hpp"
 #include "trunk/usecase/commands/EventCommands.hpp"
 #include "trunk/ports/EventRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace planning::application {
 
@@ -13,13 +13,13 @@ namespace planning::application {
 // 결과는 시작 시각 오름차순.
 class ListEventsUseCase {
 public:
-    ListEventsUseCase(ports::EventRepository& events, ports::Logger& logger);
+    ListEventsUseCase(ports::EventRepository& events, toolshed::log::Logger& logger);
 
     std::vector<domain::Event> execute(const ListEventsQuery& query);
 
 private:
     ports::EventRepository& events_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

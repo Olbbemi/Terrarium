@@ -3,7 +3,7 @@
 namespace planning::application {
 
 ListGoalsUseCase::ListGoalsUseCase(ports::GoalRepository& goals,
-                                   ports::Logger& logger)
+                                   toolshed::log::Logger& logger)
     : goals_(goals), logger_(logger) {}
 
 std::vector<domain::Goal> ListGoalsUseCase::execute() {

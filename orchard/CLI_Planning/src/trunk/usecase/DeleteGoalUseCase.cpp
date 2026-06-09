@@ -5,7 +5,7 @@
 namespace planning::application {
 
 DeleteGoalUseCase::DeleteGoalUseCase(ports::GoalRepository& goals,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : goals_(goals), logger_(logger) {}
 
 void DeleteGoalUseCase::execute(const DeleteGoalCommand& cmd) {

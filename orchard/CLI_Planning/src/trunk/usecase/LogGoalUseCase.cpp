@@ -6,7 +6,7 @@
 
 namespace planning::application {
 
-LogGoalUseCase::LogGoalUseCase(ports::GoalRepository& goals, ports::Logger& logger)
+LogGoalUseCase::LogGoalUseCase(ports::GoalRepository& goals, toolshed::log::Logger& logger)
     : goals_(goals), logger_(logger) {}
 
 void LogGoalUseCase::execute(const LogGoalCommand& cmd) {

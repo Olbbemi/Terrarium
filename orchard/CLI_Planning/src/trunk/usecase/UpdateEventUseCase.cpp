@@ -11,7 +11,7 @@ namespace planning::application {
 UpdateEventUseCase::UpdateEventUseCase(ports::EventRepository& events,
                                        const domain::ConflictDetector& detector,
                                        ports::ConflictPrompter& prompter,
-                                       ports::Logger& logger)
+                                       toolshed::log::Logger& logger)
     : events_(events),
       detector_(detector),
       prompter_(prompter),

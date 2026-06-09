@@ -3,7 +3,7 @@
 namespace planning::application {
 
 AddTodoUseCase::AddTodoUseCase(ports::TodoRepository& todos,
-                               domain::IdGenerator& idGen, ports::Logger& logger)
+                               domain::IdGenerator& idGen, toolshed::log::Logger& logger)
     : todos_(todos), idGen_(idGen), logger_(logger) {}
 
 domain::Todo::Id AddTodoUseCase::execute(const AddTodoCommand& cmd) {

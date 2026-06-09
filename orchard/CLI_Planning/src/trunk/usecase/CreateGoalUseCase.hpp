@@ -4,14 +4,14 @@
 #include "trunk/domain/IdGenerator.hpp"
 #include "trunk/usecase/commands/GoalCommands.hpp"
 #include "trunk/ports/GoalRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace planning::application {
 
 class CreateGoalUseCase {
 public:
     CreateGoalUseCase(ports::GoalRepository& goals, domain::IdGenerator& idGen,
-                      ports::Logger& logger);
+                      toolshed::log::Logger& logger);
 
     // 같은 이름이 이미 있으면 std::invalid_argument.
     // targetValue <= 0 또는 기간 역전 시에도 std::invalid_argument(Goal 불변식).
@@ -20,7 +20,7 @@ public:
 private:
     ports::GoalRepository& goals_;
     domain::IdGenerator& idGen_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

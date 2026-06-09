@@ -4,14 +4,14 @@
 
 #include "trunk/usecase/commands/GoalCommands.hpp"
 #include "trunk/ports/GoalRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace planning::application {
 
 // 목표 진행 데이터를 반환. ASCII 막대 렌더링은 어댑터(leaves) 책임.
 class ShowGoalUseCase {
 public:
-    ShowGoalUseCase(ports::GoalRepository& goals, ports::Logger& logger);
+    ShowGoalUseCase(ports::GoalRepository& goals, toolshed::log::Logger& logger);
 
     struct Result {
         std::string name;
@@ -26,7 +26,7 @@ public:
 
 private:
     ports::GoalRepository& goals_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

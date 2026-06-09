@@ -3,19 +3,19 @@
 #include <memory>
 #include <string>
 
-#include "trunk/ports/ConfigLoader.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Config.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace spdlog {
 class logger;
 }
 
-namespace planning::adapter_logger {
+namespace toolshed::log {
 
 // spdlog 기반 Logger 구현. 디버그/감사 싱크 분리, 파일 실패 시 stderr 폴백.
-class SpdlogLogger : public ports::Logger {
+class SpdlogLogger : public Logger {
 public:
-    explicit SpdlogLogger(const ports::ConfigLoader::LogConfig& config);
+    explicit SpdlogLogger(const Config& config);
     ~SpdlogLogger() override;
 
     void debug(const std::string&) override;
@@ -30,4 +30,4 @@ private:
     bool auditEnabled_;
 };
 
-}  // namespace planning::adapter_logger
+}  // namespace toolshed::log

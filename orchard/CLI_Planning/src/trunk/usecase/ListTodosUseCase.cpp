@@ -6,7 +6,7 @@
 namespace planning::application {
 
 ListTodosUseCase::ListTodosUseCase(ports::TodoRepository& todos,
-                                   ports::Logger& logger)
+                                   toolshed::log::Logger& logger)
     : todos_(todos), logger_(logger) {}
 
 std::vector<domain::Todo> ListTodosUseCase::execute(const ListTodosQuery& query) {

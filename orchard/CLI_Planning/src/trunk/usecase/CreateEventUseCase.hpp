@@ -8,7 +8,7 @@
 #include "trunk/usecase/commands/EventCommands.hpp"
 #include "trunk/ports/ConflictPrompter.hpp"
 #include "trunk/ports/EventRepository.hpp"
-#include "trunk/ports/Logger.hpp"
+#include "toolshed/log/Logger.hpp"
 
 namespace planning::application {
 
@@ -19,7 +19,7 @@ public:
                        const domain::ConflictDetector& detector,
                        domain::IdGenerator& idGen,
                        ports::ConflictPrompter& prompter,
-                       ports::Logger& logger);
+                       toolshed::log::Logger& logger);
 
     struct Result {
         std::optional<domain::Event::Id> createdId;
@@ -33,7 +33,7 @@ private:
     const domain::ConflictDetector& detector_;
     domain::IdGenerator& idGen_;
     ports::ConflictPrompter& prompter_;
-    ports::Logger& logger_;
+    toolshed::log::Logger& logger_;
 };
 
 }  // namespace planning::application

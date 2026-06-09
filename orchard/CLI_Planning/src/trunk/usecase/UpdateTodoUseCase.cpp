@@ -7,7 +7,7 @@
 namespace planning::application {
 
 UpdateTodoUseCase::UpdateTodoUseCase(ports::TodoRepository& todos,
-                                     ports::Logger& logger)
+                                     toolshed::log::Logger& logger)
     : todos_(todos), logger_(logger) {}
 
 void UpdateTodoUseCase::execute(const UpdateTodoCommand& cmd) {

@@ -1,16 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
-project(Terrarium LANGUAGES CXX)
-
-# --- C++20 표준 (설계 NF5: GCC 13+ / Clang 16+) ---
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# --- compile_commands.json 자동 생성 (clangd / code-analyze 호출그래프용) ---
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# --- 컴파일러 경고 (cpp.md 권장) ---
-add_compile_options(-Wall -Wextra -Wpedantic)
+# orchard/CLI_Planning — 앱 서브프로젝트.
+# 전역 설정(cmake_minimum/project/C++표준/경고/compile_commands/enable_testing)은
+# 최상위 Terrarium/CMakeLists.txt 로 이동. 여기서는 nutrients + 타깃만 둔다.
 
 # --- 외부 의존성: nutrients/ (in-tree vendoring, NF6 빌드 시 다운로드 0) ---
 add_subdirectory(nutrients/googletest)
@@ -24,8 +14,7 @@ set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
 add_subdirectory(nutrients/SQLiteCpp)
 
-# --- 테스트 ---
-enable_testing()
+# --- 테스트 (enable_testing 은 최상위 Terrarium/CMakeLists.txt) ---
 include(GoogleTest)
 
 # --- 코어 라이브러리 (seed/stem/stomata → libplanning_core) ---

@@ -241,8 +241,7 @@ int main(int argc, char** argv) {
         planning::domain::StdUuidGenerator idGen;
         planning::ui::CliConflictPrompter prompter(std::cin, std::cout);
 
-        pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, prompter,
-                                           logger);
+        pa::CreateEventUseCase createEvent(eventRepo, detector, idGen, logger);
         pa::ListEventsUseCase listEvents(eventRepo, logger);
         pa::UpdateEventUseCase updateEvent(eventRepo, detector, prompter, logger);
         pa::DeleteEventUseCase deleteEvent(eventRepo, logger);
@@ -278,11 +277,17 @@ int main(int argc, char** argv) {
             if (!endStr.empty()) cmd.end = parseDateTime(endStr);
             cmd.allDay = false;
             if (!evRepeat.empty()) cmd.recurrence = makeRule(evRepeat, evUntil);
-            const auto result = createEvent.execute(cmd);
-            if (result.cancelledByUser) {
-                std::cout << "취소되었습니다.\n";
-            } else {
+            // 2-phase: 충돌이면 사용자에게 묻고, 강행 선택 시 force 로 재실행.
+            auto result = createEvent.execute(cmd);
+            if (result.conflict &&
+                prompter.promptOnConflict(*result.conflict) ==
+                    planning::ports::ConflictPrompter::Choice::ADD_ANYWAY) {
+                result = createEvent.execute(cmd, /*force=*/true);
+            }
+            if (result.createdId) {
                 std::cout << "Event '" << title << "' 추가 완료\n";
+            } else {
+                std::cout << "취소되었습니다.\n";
             }
         } else if (eventList->parsed()) {
             const auto today = localTodayDate();

@@ -6,9 +6,9 @@ namespace SQLite {
 class Database;
 }
 
-namespace planning::adapter_sqlite {
+namespace toolshed::sqlite {
 
-// seasons/ 의 NNN_*.sql 마이그레이션을 버전 순으로 적용한다.
+// seasons/ 의 NNN_*.sql 마이그레이션을 버전 순으로 적용한다(메커니즘만, 앱 무관).
 // 이미 적용된 버전은 건너뛰고, 각 마이그레이션은 트랜잭션으로 적용한다.
 class MigrationRunner {
 public:
@@ -21,4 +21,4 @@ private:
     SQLite::Database& db_;
 };
 
-}  // namespace planning::adapter_sqlite
+}  // namespace toolshed::sqlite

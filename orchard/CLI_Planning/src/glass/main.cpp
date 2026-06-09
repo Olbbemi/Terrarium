@@ -13,12 +13,13 @@
 #include "climate/TomlConfigLoader.hpp"
 #include "leaves/CliConflictPrompter.hpp"
 #include "leaves/CliFormat.hpp"
-#include "roots/MigrationRunner.hpp"
 #include "roots/SqliteEventRepository.hpp"
 #include "roots/SqliteGoalRepository.hpp"
 #include "roots/SqliteTodoRepository.hpp"
 #include "toolshed/log/Config.hpp"
 #include "toolshed/log/SpdlogLogger.hpp"
+#include "toolshed/sqlite/Database.hpp"
+#include "toolshed/sqlite/MigrationRunner.hpp"
 #include "trunk/domain/ConflictDetector.hpp"
 #include "trunk/domain/Goal.hpp"
 #include "trunk/domain/Priority.hpp"
@@ -228,15 +229,14 @@ int main(int argc, char** argv) {
             .separateDebugAudit = lc.separateDebugAudit,
         });
 
-        SQLite::Database db(config.dbPath().string(),
-                            SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-        db.exec("PRAGMA journal_mode = WAL");
-        db.exec("PRAGMA foreign_keys = ON");
-        planning::adapter_sqlite::MigrationRunner(db).run(TERRARIUM_MIGRATIONS_DIR);
+        // 연결 라이프사이클(열기/PRAGMA/RAII)은 toolshed/sqlite 로 추출.
+        // 저장소는 아직 raw handle() 을 받는다(A4a 통과; A4b/c 에서 래퍼 경유 재배선).
+        auto db = toolshed::sqlite::Database::open(config.dbPath());
+        toolshed::sqlite::MigrationRunner(db.handle()).run(TERRARIUM_MIGRATIONS_DIR);
 
-        planning::adapter_sqlite::SqliteEventRepository eventRepo(db);
-        planning::adapter_sqlite::SqliteTodoRepository todoRepo(db);
-        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db);
+        planning::adapter_sqlite::SqliteEventRepository eventRepo(db.handle());
+        planning::adapter_sqlite::SqliteTodoRepository todoRepo(db.handle());
+        planning::adapter_sqlite::SqliteGoalRepository goalRepo(db.handle());
         planning::domain::ConflictDetector detector;
         planning::domain::StdUuidGenerator idGen;
         planning::adapter_cli::CliConflictPrompter prompter(std::cin, std::cout);

@@ -1,4 +1,4 @@
-#include "roots/MigrationRunner.hpp"
+#include "toolshed/sqlite/MigrationRunner.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -10,7 +10,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-namespace planning::adapter_sqlite {
+namespace toolshed::sqlite {
 
 namespace {
 
@@ -69,4 +69,4 @@ void MigrationRunner::run(const std::filesystem::path& migrationsDir) {
     }
 }
 
-}  // namespace planning::adapter_sqlite
+}  // namespace toolshed::sqlite

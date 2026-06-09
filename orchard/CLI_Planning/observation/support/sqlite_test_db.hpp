@@ -2,7 +2,7 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-#include "roots/MigrationRunner.hpp"
+#include "toolshed/sqlite/MigrationRunner.hpp"
 
 namespace planning::test {
 
@@ -12,7 +12,7 @@ inline SQLite::Database makeMigratedDb() {
     SQLite::Database db(":memory:",
                         SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
     db.exec("PRAGMA foreign_keys = ON");
-    adapter_sqlite::MigrationRunner(db).run(TERRARIUM_MIGRATIONS_DIR);
+    toolshed::sqlite::MigrationRunner(db).run(TERRARIUM_MIGRATIONS_DIR);
     return db;
 }
 

@@ -54,9 +54,8 @@ add_library(planning_climate
 target_include_directories(planning_climate PUBLIC src PRIVATE nutrients/tomlplusplus/include)
 target_link_libraries(planning_climate PUBLIC planning_core)
 
-# --- 어댑터: roots (SQLite 저장, SQLiteCpp) ---
+# --- 어댑터: roots (도메인-인지 SQLite 저장소; 연결/마이그레이션은 toolshed_sqlite) ---
 add_library(planning_roots
-    src/roots/MigrationRunner.cpp
     src/roots/SqliteEventRepository.cpp
     src/roots/SqliteTodoRepository.cpp
     src/roots/SqliteGoalRepository.cpp
@@ -78,7 +77,7 @@ target_include_directories(gaia PRIVATE src nutrients/CLI11/include)
 target_compile_definitions(gaia PRIVATE
     TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
 target_link_libraries(gaia PRIVATE
-    planning_core planning_roots toolshed_log planning_climate planning_leaves SQLiteCpp)
+    planning_core planning_roots toolshed_sqlite toolshed_log planning_climate planning_leaves SQLiteCpp)
 
 # --- 테스트 ---
 add_executable(terrarium_tests
@@ -105,9 +104,10 @@ add_executable(terrarium_tests
     observation/trunk/usecase/list_goals_usecase_test.cpp
     observation/trunk/usecase/show_dashboard_usecase_test.cpp
     observation/toolshed/log/spdlog_logger_test.cpp
+    observation/toolshed/sqlite/database_test.cpp
+    observation/toolshed/sqlite/migration_runner_test.cpp
     observation/climate/toml_config_loader_test.cpp
     observation/climate/render_default_config_test.cpp
-    observation/roots/migration_runner_test.cpp
     observation/roots/sqlite_event_repository_test.cpp
     observation/roots/sqlite_todo_repository_test.cpp
     observation/roots/sqlite_goal_repository_test.cpp
@@ -118,5 +118,5 @@ target_include_directories(terrarium_tests PRIVATE observation)
 target_compile_definitions(terrarium_tests PRIVATE
     TERRARIUM_MIGRATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/seasons")
 target_link_libraries(terrarium_tests PRIVATE
-    planning_core toolshed_log planning_climate planning_roots planning_leaves SQLiteCpp GTest::gtest_main)
+    planning_core toolshed_sqlite toolshed_log planning_climate planning_roots planning_leaves SQLiteCpp GTest::gtest_main)
 gtest_discover_tests(terrarium_tests)

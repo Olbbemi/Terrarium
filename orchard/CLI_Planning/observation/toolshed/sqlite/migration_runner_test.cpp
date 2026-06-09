@@ -6,10 +6,10 @@
 
 #include <SQLiteCpp/SQLiteCpp.h>
 
-#include "roots/MigrationRunner.hpp"
+#include "toolshed/sqlite/MigrationRunner.hpp"
 #include "support/sqlite_test_db.hpp"
 
-using planning::adapter_sqlite::MigrationRunner;
+using toolshed::sqlite::MigrationRunner;
 using planning::test::makeMigratedDb;
 using planning::test::tableExists;
 

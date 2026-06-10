@@ -13,6 +13,7 @@
 #include "climate/TomlConfigLoader.hpp"
 #include "leaves/CliConflictPrompter.hpp"
 #include "leaves/CliFormat.hpp"
+#include "leaves/TuiApp.hpp"
 #include "roots/SqliteEventRepository.hpp"
 #include "roots/SqliteGoalRepository.hpp"
 #include "roots/SqliteTodoRepository.hpp"
@@ -493,16 +494,14 @@ int main(int argc, char** argv) {
         } else if (goal->parsed()) {
             std::cout << goal->help();
         } else {
-            const auto today = localTodayDate();
-            pa::ShowDashboardQuery q;
-            q.todayDate = today;  // 로컬 달력 날짜 (todo overdue 비교용)
-            // 로컬 [오늘 자정, 내일 자정) 을 UTC instant 로 (event 범위용).
-            q.dayStart = localMidnightUtc(today);
-            q.dayEnd = localMidnightUtc(today + std::chrono::days{1});
-
-            const auto r = dashboard.execute(q);
-            std::cout << "오늘 일정 " << r.todayEventsCount
-                      << "개 / 기한 초과 Todo " << r.overdueTodosCount << "개\n";
+            // 무인자 -> 상주 TUI 진입(B1). argv 서브커맨드는 위에서 one-shot 공존.
+            planning::ui::UseCases usecases{
+                createEvent, listEvents, updateEvent, deleteEvent,
+                addTodo,     listTodos,  markTodoDone, updateTodo,
+                deleteTodo,  createGoal, logGoal,      showGoal,
+                listGoals,   updateGoal, deleteGoal,   dashboard};
+            planning::ui::TuiApp tui(usecases, logger);
+            return tui.run();
         }
     } catch (const std::exception& e) {
         std::cerr << "오류: " << e.what() << "\n";

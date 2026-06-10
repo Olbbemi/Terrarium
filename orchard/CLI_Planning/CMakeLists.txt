@@ -75,6 +75,7 @@ target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp tool
 add_library(planning_leaves
     src/leaves/CliConflictPrompter.cpp
     src/leaves/CliFormat.cpp
+    src/leaves/TuiApp.cpp
 )
 target_include_directories(planning_leaves PUBLIC src)
 # ftxui::component 가 dom/screen 을 전이 의존. Phase B 의 TuiApp 이 사용.

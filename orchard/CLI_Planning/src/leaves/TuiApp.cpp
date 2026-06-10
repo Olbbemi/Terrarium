@@ -179,6 +179,16 @@ int TuiApp::run() {
     application::UpdateEventCommand pendingUpdate;
     bool pendingIsEdit = false;
 
+    // === [SEAM] 자연어 입력 -> Command (보류, handoff 4-6 / 9장 결정 #34) ===
+    // seam = "입력 -> Command DTO" 는 이미 존재한다. 그 Command DTO 들이 곧 seam.
+    // 아래 submitEvent/submitTodo/submitGoal 이 현 슬라이스의 진입점으로,
+    //   폼 필드를 Command 로 직접 채운다 (패널+키 라우팅으로 타입을 미리 확정).
+    // 미래(LLM): 자연어는 "타입 모르는 Command" 를 내므로, 같은 Command 를
+    //   생성하되 Command -> 유스케이스 디스패치가 새로 필요해진다(폼은 패널로 회피).
+    // 투기적 파서 포트/메서드는 의식적으로 정의하지 않는다(async/의도분류는 LLM-의존).
+    // 후속 슬라이스가 NL 파서를 들일 때, 그 산출물(Command)은 바로 이 seam 으로 진입.
+    // ====================================================================
+
     // 폼 필드 -> Command 빌드 -> 실행. 5-3: 성공만 모달 닫음, 실패는 배너로 유지.
     auto submitEvent = [&] {
         formError.clear();

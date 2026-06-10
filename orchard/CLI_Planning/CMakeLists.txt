@@ -14,6 +14,14 @@ set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
 add_subdirectory(nutrients/SQLiteCpp)
 
+# FTXUI: TUI(leaves/ui) driving 어댑터용. 예제/문서/테스트/install 타깃은 끔.
+set(FTXUI_QUIET ON CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(nutrients/ftxui)
+
 # --- 테스트 (enable_testing 은 최상위 Terrarium/CMakeLists.txt) ---
 include(GoogleTest)
 
@@ -63,13 +71,14 @@ add_library(planning_roots
 target_include_directories(planning_roots PUBLIC src)
 target_link_libraries(planning_roots PUBLIC planning_core PRIVATE SQLiteCpp toolshed_sqlite)
 
-# --- 어댑터: leaves (CLI driving) ---
+# --- 어댑터: leaves (UI driving: CLI 포맷/프롬프트 + FTXUI TUI) ---
 add_library(planning_leaves
     src/leaves/CliConflictPrompter.cpp
     src/leaves/CliFormat.cpp
 )
 target_include_directories(planning_leaves PUBLIC src)
-target_link_libraries(planning_leaves PUBLIC planning_core)
+# ftxui::component 가 dom/screen 을 전이 의존. Phase B 의 TuiApp 이 사용.
+target_link_libraries(planning_leaves PUBLIC planning_core ftxui::component)
 
 # --- 실행 파일: gaia (Composition Root) ---
 add_executable(gaia src/glass/main.cpp)

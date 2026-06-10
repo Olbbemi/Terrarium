@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <string>
 #include <vector>
@@ -39,6 +40,7 @@ int TuiApp::run() {
 
     // --- view-state: 패널별 도메인 객체 + 표시 줄 + Today 요약 (5-1) ---
     std::vector<domain::Event> loadedEvents;
+    std::vector<domain::Todo> loadedTodos;
     std::vector<std::string> eventLines, todoLines, goalLines;
     std::string todaySummary;
     int selEvent = 0, selTodo = 0, selGoal = 0;
@@ -47,6 +49,28 @@ int TuiApp::run() {
     auto toInputDateTime = [](ch::sys_seconds t) {
         std::string s = formatDateTime(t);
         if (s.size() > 10) s[10] = 'T';
+        return s;
+    };
+
+    // "a, b ,c" -> {"a","b","c"} (콤마 구분, 공백 트림, 빈 토큰 버림).
+    auto splitTags = [](const std::string& s) {
+        std::vector<std::string> out;
+        std::size_t i = 0;
+        while (i < s.size()) {
+            std::size_t j = s.find(',', i);
+            if (j == std::string::npos) j = s.size();
+            std::size_t b = i, e = j;
+            while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
+            while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1]))) --e;
+            if (e > b) out.push_back(s.substr(b, e - b));
+            i = j + 1;
+        }
+        return out;
+    };
+    // {"a","b"} -> "a,b" (폼 prefill 라운드트립).
+    auto joinTags = [](const std::vector<std::string>& v) {
+        std::string s;
+        for (std::size_t i = 0; i < v.size(); ++i) s += (i ? "," : "") + v[i];
         return s;
     };
 
@@ -73,6 +97,7 @@ int TuiApp::run() {
             eventLines.push_back(line);
         }
 
+        loadedTodos.clear();
         todoLines.clear();
         application::ListTodosQuery tq;  // 필터 없음 = 전체(작업 패널)
         for (const auto& t : uc_.listTodos.execute(tq)) {
@@ -85,6 +110,7 @@ int TuiApp::run() {
                     line += (i ? "," : "") + t.tags()[i];
                 }
             }
+            loadedTodos.push_back(t);
             todoLines.push_back(line);
         }
 
@@ -195,6 +221,43 @@ int TuiApp::run() {
         }
     };
 
+    // --- B3b 쓰기 상태: Todo 모달 폼(충돌 없음). formError/toast 는 공유(동시 1개) ---
+    bool showTodoForm = false;
+    bool todoEditMode = false;
+    domain::Todo::Id editTodoId{};
+    std::string tTitle, tPriority, tDue, tTags;  // 폼 필드
+
+    // Todo 폼 필드 -> Command -> 실행. 5-3: 성공만 모달 닫음, 실패는 배너로 유지.
+    auto submitTodo = [&] {
+        formError.clear();
+        try {
+            if (!todoEditMode) {
+                application::AddTodoCommand cmd;
+                cmd.title = tTitle;  // 빈 제목은 도메인 불변식 throw
+                cmd.priority = tPriority.empty() ? domain::Priority::MEDIUM
+                                                 : parsePriority(tPriority);
+                cmd.tags = splitTags(tTags);
+                if (!tDue.empty()) cmd.due = parseDate(tDue);
+                uc_.addTodo.execute(cmd);
+            } else {
+                application::UpdateTodoCommand cmd;  // tags 는 전체 교체, due 는 중첩 optional
+                cmd.id = editTodoId;
+                cmd.title = tTitle;
+                if (!tPriority.empty()) cmd.priority = parsePriority(tPriority);
+                cmd.tags = splitTags(tTags);
+                cmd.due = std::optional<ch::sys_days>{};  // 기본: 마감 해제
+                if (!tDue.empty()) {
+                    cmd.due = std::optional<ch::sys_days>{parseDate(tDue)};
+                }
+                uc_.updateTodo.execute(cmd);
+            }
+            showTodoForm = false;
+            reload();
+        } catch (const std::exception& e) {
+            formError = e.what();  // 모달 유지
+        }
+    };
+
     // --- 대시보드(읽기) 컴포넌트: B2 ---
     auto eventsMenu = Menu(&eventLines, &selEvent);
     auto todosMenu = Menu(&todoLines, &selTodo);
@@ -227,11 +290,15 @@ int TuiApp::run() {
     auto dashboard = Renderer(container, [&] {
         Element today = todaySummary.empty() ? (text("(요약 없음)") | dim)
                                              : (text(todaySummary) | center);
+        std::string actions;  // 패널별 액션 바(5-5). 동작하는 키만 노출.
+        switch (activePanel) {
+            case kEvents: actions = "a: 추가  e: 수정  x: 삭제  "; break;
+            case kTodos: actions = "a: 추가  e: 수정  d: 완료  x: 삭제  "; break;
+            default: actions = ""; break;  // Today=읽기전용, Goals=B3c 예정
+        }
         Element footer =
             toast.empty()
-                ? (text("1-4: 패널  up/down: 이동  a: 추가  e: 수정  x: 삭제  "
-                        "q: 종료") |
-                   dim)
+                ? (text("1-4: 패널  up/down: 이동  " + actions + "q: 종료") | dim)
                 : (text(toast) | color(Color::Yellow));
         return vbox({
                    text("Terrarium 대시보드") | bold | hcenter,
@@ -310,13 +377,59 @@ int TuiApp::run() {
                border | size(WIDTH, GREATER_THAN, 44) | bgcolor(Color::Black);
     });
 
-    // 모달 합성: 대시보드 위에 폼, 그 위에 충돌.
+    // --- Todo 폼 모달 컴포넌트(B3b) ---
+    InputOption todoOpt;
+    todoOpt.multiline = false;
+    todoOpt.on_enter = [&] { submitTodo(); };
+    auto inTTitle = Input(&tTitle, todoOpt);
+    auto inTPriority = Input(&tPriority, todoOpt);
+    auto inTDue = Input(&tDue, todoOpt);
+    auto inTTags = Input(&tTags, todoOpt);
+    auto btnTSave = Button("저장", [&] { submitTodo(); }, ButtonOption::Ascii());
+    auto btnTCancel =
+        Button("취소", [&] { showTodoForm = false; }, ButtonOption::Ascii());
+    auto todoFormContainer = Container::Vertical({
+        inTTitle,
+        inTPriority,
+        inTDue,
+        inTTags,
+        Container::Horizontal({btnTSave, btnTCancel}),
+    });
+    auto todoForm = Renderer(todoFormContainer, [&] {
+        auto field = [](const std::string& label, Component in) {
+            return hbox({text(label) | size(WIDTH, EQUAL, 8),
+                         in->Render() | flex | border});
+        };
+        Elements rows = {
+            text(todoEditMode ? "할 일 수정" : "할 일 추가") | bold,
+            separator(),
+            field("제목", inTTitle),
+            field("우선순위", inTPriority),
+            field("마감", inTDue),
+            field("태그", inTTags),
+            text("우선순위 high|medium|low (비우면 medium) / 마감 YYYY-MM-DD "
+                 "(비우면 없음) / 태그 콤마구분") |
+                dim,
+        };
+        if (!formError.empty()) {
+            rows.push_back(text(formError) | color(Color::Red));
+        }
+        rows.push_back(separator());
+        rows.push_back(
+            hbox({btnTSave->Render(), text("  "), btnTCancel->Render()}));
+        return vbox(rows) | border | size(WIDTH, GREATER_THAN, 54) |
+               bgcolor(Color::Black);
+    });
+
+    // 모달 합성: 대시보드 위에 이벤트 폼, 그 위에 충돌, 그 위에 Todo 폼.
     auto withForm = Modal(dashboard, eventForm, &showEventForm);
     auto withConflict = Modal(withForm, conflictDialog, &showConflict);
+    auto withTodoForm = Modal(withConflict, todoForm, &showTodoForm);
 
     // --- 키 처리: 모달이 열려 있으면 모달/입력이 처리(여기선 통과) ---
-    auto root = CatchEvent(withConflict, [&](const Event& event) {
-        if (showEventForm || showConflict) return false;  // 모달 입력 우선
+    auto root = CatchEvent(withTodoForm, [&](const Event& event) {
+        if (showEventForm || showConflict || showTodoForm)
+            return false;  // 모달 입력 우선
 
         if (event == Event::Character('q')) {
             screen.Exit();
@@ -380,6 +493,70 @@ int TuiApp::run() {
                     uc_.deleteEvent.execute(
                         application::DeleteEventCommand{loadedEvents[selEvent].id()});
                     toast = "이벤트 삭제됨.";
+                    reload();
+                } catch (const std::exception& e) {
+                    toast = std::string("삭제 실패: ") + e.what();
+                }
+                return true;
+            }
+        }
+
+        // Todos 패널 쓰기 액션(B3b). a=추가 e=수정 d=완료 x=삭제.
+        if (activePanel == kTodos) {
+            const bool hasSel = !loadedTodos.empty() &&
+                                selTodo < static_cast<int>(loadedTodos.size());
+            if (event == Event::Character('a')) {
+                todoEditMode = false;
+                tTitle.clear();
+                tPriority.clear();
+                tDue.clear();
+                tTags.clear();
+                formError.clear();
+                toast.clear();
+                showTodoForm = true;
+                return true;
+            }
+            if (event == Event::Character('e')) {
+                if (!hasSel) {
+                    toast = "수정할 할 일이 없습니다.";
+                    return true;
+                }
+                const auto& td = loadedTodos[selTodo];
+                todoEditMode = true;
+                editTodoId = td.id();
+                tTitle = td.title();
+                tPriority = priorityText(td.priority());
+                tDue = td.dueDate() ? formatDate(*td.dueDate()) : std::string{};
+                tTags = joinTags(td.tags());
+                formError.clear();
+                toast.clear();
+                showTodoForm = true;
+                return true;
+            }
+            if (event == Event::Character('d')) {
+                if (!hasSel) {
+                    toast = "완료할 할 일이 없습니다.";
+                    return true;
+                }
+                try {
+                    uc_.markTodoDone.execute(
+                        application::MarkTodoDoneCommand{loadedTodos[selTodo].id()});
+                    toast = "할 일 완료 처리됨.";
+                    reload();
+                } catch (const std::exception& e) {
+                    toast = std::string("완료 실패: ") + e.what();
+                }
+                return true;
+            }
+            if (event == Event::Character('x')) {
+                if (!hasSel) {
+                    toast = "삭제할 할 일이 없습니다.";
+                    return true;
+                }
+                try {
+                    uc_.deleteTodo.execute(
+                        application::DeleteTodoCommand{loadedTodos[selTodo].id()});
+                    toast = "할 일 삭제됨.";
                     reload();
                 } catch (const std::exception& e) {
                     toast = std::string("삭제 실패: ") + e.what();

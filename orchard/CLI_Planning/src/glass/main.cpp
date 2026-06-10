@@ -52,18 +52,9 @@ namespace {
 
 namespace pa = planning::application;
 
-// CLI 입출력 변환(파싱·포맷·로컬↔UTC·진행 막대)은 테스트 가능한 leaves 어댑터로 분리.
-// 여기서는 그 이름들을 그대로 끌어와 사용한다.
+// CLI 입출력 변환(파싱·포맷·로컬↔UTC·진행 막대·오늘 날짜)은 테스트 가능한 leaves
+// 어댑터로 분리. 여기서는 그 이름들(localToday 포함)을 그대로 끌어와 사용한다.
 using namespace planning::ui;
-
-// 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A). 벽시계를 읽으므로 Composition Root 에 둔다.
-std::chrono::sys_days localTodayDate() {
-    const auto* zone = std::chrono::current_zone();
-    const std::chrono::local_days ld = std::chrono::floor<std::chrono::days>(
-        zone->to_local(std::chrono::system_clock::now()));
-    // 로컬 civil 날짜의 day-count 를 그대로 sys_days(civil date)로 재해석.
-    return std::chrono::sys_days{ld.time_since_epoch()};
-}
 
 }  // namespace
 
@@ -291,7 +282,7 @@ int main(int argc, char** argv) {
                 std::cout << "취소되었습니다.\n";
             }
         } else if (eventList->parsed()) {
-            const auto today = localTodayDate();
+            const auto today = localToday();
             pa::ListEventsQuery q;
             if (!evFrom.empty() || !evTo.empty()) {
                 const auto from = evFrom.empty() ? today : parseDate(evFrom);
@@ -383,8 +374,8 @@ int main(int argc, char** argv) {
             std::cout << "Todo '" << todoTitle << "' 추가 완료\n";
         } else if (todoList->parsed()) {
             pa::ListTodosQuery q;
-            if (listToday) q.dueOn = localTodayDate();
-            if (listOverdue) q.overdueAsOf = localTodayDate();
+            if (listToday) q.dueOn = localToday();
+            if (listOverdue) q.overdueAsOf = localToday();
             if (!listTag.empty()) q.tag = listTag;
             if (!listPriority.empty()) q.priority = parsePriority(listPriority);
 

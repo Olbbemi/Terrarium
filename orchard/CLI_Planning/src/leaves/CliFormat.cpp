@@ -84,6 +84,12 @@ std::chrono::sys_seconds localMidnightUtc(std::chrono::sys_days date,
                            zone);
 }
 
+std::chrono::sys_days localToday(const time_zone* zone) {
+    // 로컬 civil 날짜의 day-count 를 그대로 sys_days(civil date)로 재해석(정책 A).
+    const local_days ld = floor<days>(zone->to_local(system_clock::now()));
+    return sys_days{ld.time_since_epoch()};
+}
+
 std::string progressBar(double ratio, int width) {
     int filled = static_cast<int>(ratio * width + 0.5);
     if (filled < 0) filled = 0;

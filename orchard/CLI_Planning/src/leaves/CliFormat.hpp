@@ -47,6 +47,10 @@ std::chrono::sys_seconds localMidnightUtc(
     std::chrono::sys_days date,
     const std::chrono::time_zone* zone = std::chrono::current_zone());
 
+// 시스템 로컬 타임존 기준 오늘 달력 날짜(정책 A). 벽시계(now)를 읽는다.
+std::chrono::sys_days localToday(
+    const std::chrono::time_zone* zone = std::chrono::current_zone());
+
 // 달성률(0.0~) → ASCII 막대. 초과 달성은 막대 가득참으로 클램프.
 std::string progressBar(double ratio, int width = 10);
 

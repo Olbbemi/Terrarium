@@ -4,7 +4,9 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ftxui/component/component.hpp>
@@ -18,6 +20,7 @@
 #include "trunk/domain/Todo.hpp"
 #include "trunk/usecase/commands/DashboardCommands.hpp"
 #include "trunk/usecase/commands/EventCommands.hpp"
+#include "trunk/usecase/commands/GoalCommands.hpp"
 #include "trunk/usecase/commands/TodoCommands.hpp"
 
 namespace planning::ui {
@@ -41,6 +44,7 @@ int TuiApp::run() {
     // --- view-state: 패널별 도메인 객체 + 표시 줄 + Today 요약 (5-1) ---
     std::vector<domain::Event> loadedEvents;
     std::vector<domain::Todo> loadedTodos;
+    std::vector<domain::Goal> loadedGoals;
     std::vector<std::string> eventLines, todoLines, goalLines;
     std::string todaySummary;
     int selEvent = 0, selTodo = 0, selGoal = 0;
@@ -72,6 +76,21 @@ int TuiApp::run() {
         std::string s;
         for (std::size_t i = 0; i < v.size(); ++i) s += (i ? "," : "") + v[i];
         return s;
+    };
+    // 정수 필드 파싱(목표값). 빈칸/비정수/범위초과는 runtime_error -> 배너. 부호/0
+    // 검사는 도메인 불변식(targetValue<=0 throw)에 위임.
+    auto parseTarget = [](const std::string& s) -> int {
+        try {
+            std::size_t pos = 0;
+            int v = std::stoi(s, &pos);
+            while (pos < s.size() &&
+                   std::isspace(static_cast<unsigned char>(s[pos])))
+                ++pos;
+            if (pos != s.size()) throw std::invalid_argument("trailing");
+            return v;
+        } catch (const std::exception&) {
+            throw std::runtime_error("목표값은 정수여야 합니다: " + s);
+        }
     };
 
     // 조회 유스케이스 재호출 -> view-state 재구성. 벡터는 in-place 갱신(주소 안정).
@@ -114,6 +133,7 @@ int TuiApp::run() {
             todoLines.push_back(line);
         }
 
+        loadedGoals.clear();
         goalLines.clear();
         for (const auto& g : uc_.listGoals.execute()) {
             const int pct = static_cast<int>(g.progressRatio() * 100 + 0.5);
@@ -122,6 +142,7 @@ int TuiApp::run() {
                                std::to_string(g.currentValue()) + "/" +
                                std::to_string(g.targetValue()) + " " + g.unit() +
                                ")";
+            loadedGoals.push_back(g);
             goalLines.push_back(line);
         }
 
@@ -258,6 +279,40 @@ int TuiApp::run() {
         }
     };
 
+    // --- B3c 쓰기 상태: Goal 모달 폼(충돌 없음). 단위는 수정 불가(4장 명세) ---
+    bool showGoalForm = false;
+    bool goalEditMode = false;
+    domain::Goal::Id editGoalId{};
+    std::string gName, gTarget, gUnit, gStart, gEnd;  // 폼 필드
+
+    // Goal 폼 필드 -> Command -> 실행. 5-3: 성공만 모달 닫음, 실패는 배너로 유지.
+    auto submitGoal = [&] {
+        formError.clear();
+        try {
+            if (!goalEditMode) {
+                application::CreateGoalCommand cmd;
+                cmd.name = gName;                  // 빈 이름/target<=0 은 도메인 throw
+                cmd.targetValue = parseTarget(gTarget);
+                cmd.unit = gUnit;
+                cmd.periodStart = parseDate(gStart);  // 형식오류 throw
+                cmd.periodEnd = parseDate(gEnd);      // start>end 는 도메인 throw
+                uc_.createGoal.execute(cmd);
+            } else {
+                application::UpdateGoalCommand cmd;  // 단위(unit)는 변경 불가
+                cmd.id = editGoalId;
+                cmd.name = gName;
+                cmd.targetValue = parseTarget(gTarget);
+                cmd.period = std::pair<ch::sys_days, ch::sys_days>{
+                    parseDate(gStart), parseDate(gEnd)};
+                uc_.updateGoal.execute(cmd);
+            }
+            showGoalForm = false;
+            reload();
+        } catch (const std::exception& e) {
+            formError = e.what();  // 모달 유지
+        }
+    };
+
     // --- 대시보드(읽기) 컴포넌트: B2 ---
     auto eventsMenu = Menu(&eventLines, &selEvent);
     auto todosMenu = Menu(&todoLines, &selTodo);
@@ -294,7 +349,10 @@ int TuiApp::run() {
         switch (activePanel) {
             case kEvents: actions = "a: 추가  e: 수정  x: 삭제  "; break;
             case kTodos: actions = "a: 추가  e: 수정  d: 완료  x: 삭제  "; break;
-            default: actions = ""; break;  // Today=읽기전용, Goals=B3c 예정
+            case kGoals:
+                actions = "a: 추가  e: 수정  x: 삭제  l: 진행+1  ";
+                break;
+            default: actions = ""; break;  // Today=읽기전용
         }
         Element footer =
             toast.empty()
@@ -421,14 +479,63 @@ int TuiApp::run() {
                bgcolor(Color::Black);
     });
 
-    // 모달 합성: 대시보드 위에 이벤트 폼, 그 위에 충돌, 그 위에 Todo 폼.
+    // --- Goal 폼 모달 컴포넌트(B3c) ---
+    InputOption goalOpt;
+    goalOpt.multiline = false;
+    goalOpt.on_enter = [&] { submitGoal(); };
+    auto inGName = Input(&gName, goalOpt);
+    auto inGTarget = Input(&gTarget, goalOpt);
+    auto inGUnit = Input(&gUnit, goalOpt);
+    auto inGStart = Input(&gStart, goalOpt);
+    auto inGEnd = Input(&gEnd, goalOpt);
+    auto btnGSave = Button("저장", [&] { submitGoal(); }, ButtonOption::Ascii());
+    auto btnGCancel =
+        Button("취소", [&] { showGoalForm = false; }, ButtonOption::Ascii());
+    auto goalFormContainer = Container::Vertical({
+        inGName,
+        inGTarget,
+        inGUnit,
+        inGStart,
+        inGEnd,
+        Container::Horizontal({btnGSave, btnGCancel}),
+    });
+    auto goalForm = Renderer(goalFormContainer, [&] {
+        auto field = [](const std::string& label, Component in) {
+            return hbox({text(label) | size(WIDTH, EQUAL, 10),
+                         in->Render() | flex | border});
+        };
+        Elements rows = {
+            text(goalEditMode ? "목표 수정" : "목표 추가") | bold,
+            separator(),
+            field("이름", inGName),
+            field("목표값", inGTarget),
+            field("단위", inGUnit),
+            field("시작", inGStart),
+            field("종료", inGEnd),
+            text(goalEditMode
+                     ? "기간 YYYY-MM-DD / 단위는 수정 불가(표시만)"
+                     : "목표값 정수 / 단위 자유 / 기간 YYYY-MM-DD") |
+                dim,
+        };
+        if (!formError.empty()) {
+            rows.push_back(text(formError) | color(Color::Red));
+        }
+        rows.push_back(separator());
+        rows.push_back(
+            hbox({btnGSave->Render(), text("  "), btnGCancel->Render()}));
+        return vbox(rows) | border | size(WIDTH, GREATER_THAN, 54) |
+               bgcolor(Color::Black);
+    });
+
+    // 모달 합성: 대시보드 위에 이벤트 폼, 충돌, Todo 폼, Goal 폼 순으로.
     auto withForm = Modal(dashboard, eventForm, &showEventForm);
     auto withConflict = Modal(withForm, conflictDialog, &showConflict);
     auto withTodoForm = Modal(withConflict, todoForm, &showTodoForm);
+    auto withGoalForm = Modal(withTodoForm, goalForm, &showGoalForm);
 
     // --- 키 처리: 모달이 열려 있으면 모달/입력이 처리(여기선 통과) ---
-    auto root = CatchEvent(withTodoForm, [&](const Event& event) {
-        if (showEventForm || showConflict || showTodoForm)
+    auto root = CatchEvent(withGoalForm, [&](const Event& event) {
+        if (showEventForm || showConflict || showTodoForm || showGoalForm)
             return false;  // 모달 입력 우선
 
         if (event == Event::Character('q')) {
@@ -557,6 +664,72 @@ int TuiApp::run() {
                     uc_.deleteTodo.execute(
                         application::DeleteTodoCommand{loadedTodos[selTodo].id()});
                     toast = "할 일 삭제됨.";
+                    reload();
+                } catch (const std::exception& e) {
+                    toast = std::string("삭제 실패: ") + e.what();
+                }
+                return true;
+            }
+        }
+
+        // Goals 패널 쓰기 액션(B3c). a=추가 e=수정 x=삭제 l=진행+1(LogGoal).
+        if (activePanel == kGoals) {
+            const bool hasSel = !loadedGoals.empty() &&
+                                selGoal < static_cast<int>(loadedGoals.size());
+            if (event == Event::Character('a')) {
+                goalEditMode = false;
+                gName.clear();
+                gTarget.clear();
+                gUnit.clear();
+                gStart.clear();
+                gEnd.clear();
+                formError.clear();
+                toast.clear();
+                showGoalForm = true;
+                return true;
+            }
+            if (event == Event::Character('e')) {
+                if (!hasSel) {
+                    toast = "수정할 목표가 없습니다.";
+                    return true;
+                }
+                const auto& gl = loadedGoals[selGoal];
+                goalEditMode = true;
+                editGoalId = gl.id();
+                gName = gl.name();
+                gTarget = std::to_string(gl.targetValue());
+                gUnit = gl.unit();
+                gStart = formatDate(gl.periodStart());
+                gEnd = formatDate(gl.periodEnd());
+                formError.clear();
+                toast.clear();
+                showGoalForm = true;
+                return true;
+            }
+            if (event == Event::Character('l')) {
+                if (!hasSel) {
+                    toast = "진행 기록할 목표가 없습니다.";
+                    return true;
+                }
+                try {
+                    uc_.logGoal.execute(  // 이름으로 누적(LogGoalCommand.goalName)
+                        application::LogGoalCommand{loadedGoals[selGoal].name()});
+                    toast = "목표 진행 +1.";
+                    reload();
+                } catch (const std::exception& e) {
+                    toast = std::string("진행 기록 실패: ") + e.what();
+                }
+                return true;
+            }
+            if (event == Event::Character('x')) {
+                if (!hasSel) {
+                    toast = "삭제할 목표가 없습니다.";
+                    return true;
+                }
+                try {
+                    uc_.deleteGoal.execute(
+                        application::DeleteGoalCommand{loadedGoals[selGoal].id()});
+                    toast = "목표 삭제됨.";
                     reload();
                 } catch (const std::exception& e) {
                     toast = std::string("삭제 실패: ") + e.what();
